@@ -6,6 +6,10 @@ pub enum Sensor {
     Osc,
     LocX,
     LocY,
+    Right,
+    Left,
+    Top,
+    Bottom,
     Bias(i8),
     Random,
     // Life,
@@ -14,11 +18,15 @@ pub enum Sensor {
 impl Distribution<Sensor> for Standard {
     fn sample<R: Rng + ?Sized>(&self, _rng: &mut R) -> Sensor {
         let actions = [
-            // Sensor::Osc,
             Sensor::LocX,
             Sensor::LocY,
-            // Sensor::Bias(random()),
+            Sensor::Osc,
+            Sensor::Bias(random()),
             Sensor::Random,
+            Sensor::Right,
+            Sensor::Left,
+            Sensor::Top,
+            Sensor::Bottom,
             // Sensor::Life,
         ];
         let i = random::<usize>() % actions.len();

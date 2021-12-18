@@ -80,57 +80,54 @@ impl NetNodes {
 }
 
 fn rand_h() -> NeuronID {
-    format!("h-{}", random::<usize>() % 5)
+    format!("h-{}", random::<usize>() % 10)
 }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Net {
     // pub input_neurons: HashMap<Sensor, Neuron>,
     pub input_links: HashMap<Sensor, HashMap<NeuralTarget, NeuralLink>>,
 
     pub hidden_links: HashMap<NeuronID, HashMap<NeuralTarget, NeuralLink>>,
     pub nodes: NetNodes,
-    #[serde(default)]
     pub color: [f32; 3],
 }
 
+impl Default for Net {
+    fn default() -> Self {
+        Self {
+            color: [random(), random(), random()],
+            input_links: Default::default(),
+            hidden_links: Default::default(),
+            nodes: Default::default(),
+        }
+    }
+}
 impl Net {
+    // pub fn links(
+    //     &self,
+    // ) -> std::iter::Chain<
+    //     std::collections::hash_map::Values<
+    //         '_,
+    //         std::string::String,
+    //         HashMap<NeuralTarget, NeuralLink>,
+    //     >,
+    //     std::collections::hash_map::Values<'_, Sensor, HashMap<NeuralTarget, NeuralLink>>,
+    // > {
+    //     self.hidden_links.values().chain(self.input_links.values())
+    // }
     pub fn update_nodes(&mut self) {
         self.nodes = NetNodes::default();
-        self.color = [0.0, 0.0, 0.0];
-        let mut count = 0;
-        let mut c0 = 0.0;
-        let mut c1 = 0.0;
         for links in self.input_links.values() {
             for (target, link) in links {
-                // self.color[count % self.color.len()]+= link.weight;
-                count += 1;
-                self.color[0]+= if link.inverse { 0.0 } else { 1.0 };
-                self.color[2]+= if link.weight > 0.0 { 1.0 } else { 0.0 };
-                c0 += 1.0;
                 self.nodes.create_link_node(&target);
             }
         }
         for links in self.hidden_links.values() {
             for (target, link) in links {
-                // self.color[count % self.color.len()]+= link.weight;
-                count += 1;
-                self.color[1]+= if link.inverse { 0.0 } else { 1.0 };
-                self.color[2]+= if link.weight > 0.0 { 1.0 } else { 0.0 };
-                c1 += 1.0;
                 self.nodes.create_link_node(&target);
             }
         }
-        self.color[0]/= c0 as f32;
-        self.color[1]/= c1 as f32;
-        self.color[2]/= count as f32;
-        // self.color[0] = c0 / (c1 + c0);
-        // self.color[1] = 0.1 +  (self.nodes.hidden.len() % 3) as f32 / 3.0;
-        // self.color[2] = 0.1 +  (self.nodes.output.len() % 3) as f32 / 3.0;
-        // self.color[2]/= c0 + c1;
-        // self.color[0] = c0 as f32 / 5.0;
-        // self.color[1] = c1 as f32 / 5.0;
-        // self.color[2] = self.nodes.hidden.len() as f32 / 3.0;
     }
     pub fn clear(&mut self) {
         let clone: Vec<_> = self.hidden_links.keys().cloned().collect();
@@ -141,7 +138,18 @@ impl Net {
         }
     }
     pub fn randomize(&mut self) {
-        for _ in 0..1 {
+        let i = random::<usize>() % self.color.len();
+        let c = self.color.get_mut(i).unwrap();
+        *c += (random::<f32>() * 2.0 - 1.0) * 0.6;
+        if *c > 1.0 {
+            *c = 1.0 - (*c - 1.0);
+        }
+        if *c < 0.0 {
+            *c = c.abs();
+        }
+        *c = c.min(1.0).max(0.0);
+
+        for _ in 0..3 {
             self.add_link_from_sensor(random(), NeuralTarget::Action(random()));
         }
         for _ in 0..1 {
@@ -228,6 +236,7 @@ impl Net {
 
 #[derive(Default, Clone)]
 pub struct NetGenome {
+    pub color: [f32; 3],
     pub input_links: HashMap<Sensor, HashMap<NeuralTarget, NeuralLink>>,
     pub hidden_links: HashMap<NeuronID, HashMap<NeuralTarget, NeuralLink>>,
 }
@@ -235,6 +244,7 @@ pub struct NetGenome {
 impl HasGenome<NetGenome> for Net {
     fn to_genome(&self) -> NetGenome {
         NetGenome {
+            color: self.color.clone(),
             input_links: self.input_links.clone(),
             hidden_links: self.hidden_links.clone(),
         }
@@ -242,6 +252,7 @@ impl HasGenome<NetGenome> for Net {
 
     fn from_genome(genome: &NetGenome) -> Self {
         let mut ret = Net {
+            color: genome.color.clone(),
             input_links: genome.input_links.clone(),
             hidden_links: genome.hidden_links.clone(),
             ..Default::default()
@@ -253,6 +264,10 @@ impl HasGenome<NetGenome> for Net {
 impl Genome for NetGenome {
     fn mix(&self, p2: &NetGenome) -> NetGenome {
         let mut ret = self.clone();
+        let i: usize = random::<usize>() % ret.color.len();
+        ret.color[i] = ret.color[i] * 0.3 + p2.color[i] * 0.7;
+        // ret.color[i] = ret.color[i] * 0.01 + p2.color[i] * 0.99;
+        // ret.color[i] = p2.color[i];
         // return ret;
         for (i, links) in &p2.input_links {
             for (target, link) in links {

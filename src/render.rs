@@ -11,7 +11,7 @@ use crate::server::Server;
 pub struct Render {}
 impl Render {
     pub fn new(server: Server) {
-        let main_window = WindowDesc::new(ui_builder);
+        let main_window = WindowDesc::new(ui_builder).window_size((600.0, 600.0));
         let data = MyData {
             server,
             ..Default::default()
@@ -37,7 +37,7 @@ fn ui_builder() -> impl Widget<MyData> {
         })
         .padding(5.0);
 
-    let container = Container::new(EvoWidget::new());
+    let container = Container::new(EvoWidget::new()).fix_size(500.0, 500.0);
 
     Flex::column()
         .with_child(label)
@@ -49,7 +49,6 @@ const FPS: usize = 30;
 struct MyData {
     #[data(ignore)]
     pub server: Server,
-    #[data(ignore)]
     pub tps: f32,
     pub i: f32,
 }
@@ -135,7 +134,7 @@ impl Widget<MyData> for EvoWidget {
         let min_side = max_size.height.min(max_size.width);
         Size {
             width: 500.0,
-            height: 1000.0,
+            height: 500.0,
         }
     }
 
@@ -154,17 +153,33 @@ impl Widget<MyData> for EvoWidget {
             let x1 = x0 + s;
             let y0 = s * rep.pos.1 as f64;
             let y1 = y0 + s;
-            let is_alive = rep.is_alive(&data.server.sim.world);
-            let color =
-            // if is_alive {
-                Color::hlc(
-                    (rep.net.color[0] * 100.0 + rep.net.color[1] * 200.0+ rep.net.color[2] * 200.0).into(),
-                    60.0 + 60.0 * (rep.net.color[1]) as f64,
-                    60.0 + 60.0 * (rep.net.color[2]) as f64,
-                );
-            // } else {
-            //     Color::RED
-            // };
+            let is_alive = rep.is_alive(&data.server.sim.world, &data.server.sim.mapper);
+            // let h = rep.net.links().count() * 30 % 360;
+            let c = rep.net.color;
+            let max = c[0].max(c[1]).max(c[2]) as f64;
+            let min = c[0].min(c[1]).min(c[2]) as f64;
+            let diff = (max - min).max(0.01);
+            let color = if is_alive {
+                let base = 0.2;
+                Color::rgb(
+                    base + (1.0 - base) * (-min + (c[0] as f64) / diff),
+                    base + (1.0 - base) * (-min + (c[1] as f64) / diff),
+                    base + (1.0 - base) * (-min + (c[2] as f64) / diff),
+                )
+                // Color::hlc(h as f64, 80.0, 120.0)
+                // color
+                // Color::rgb(0.3, 1.0, 0.1)
+            } else {
+                let base = 0.05;
+                let top = 0.7;
+                Color::rgb(
+                    base + (1.0 - base - top) * (-min + (c[0] as f64) / diff),
+                    base + (1.0 - base - top) * (-min + (c[1] as f64) / diff),
+                    base + (1.0 - base - top) * (-min + (c[2] as f64) / diff),
+                )
+                // Color::rgb(1.0, 0.6, 0.0)
+                // Color::hlc(h as f64, 70.0, 110.0)
+            };
             ctx.fill(Rect::new(x0, y0, x1, y1), &color);
         });
     }

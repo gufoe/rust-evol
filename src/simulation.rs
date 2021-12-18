@@ -10,14 +10,14 @@ pub struct Simulation {
     pub world: World,
     pub replicants: Vec<Replicant>,
     // #[serde(skip_serializing)]
-    mapper: CellMapper,
+    pub mapper: CellMapper,
 }
 
 impl Simulation {
     pub fn setup(&mut self) {
         self.mapper = CellMapper::default();
         self.replicants.iter_mut().for_each(|rep| {
-            while !self.mapper.move_abs(
+            while !self.mapper.set(
                 &mut rep.pos,
                 (
                     random::<i32>().abs() % self.world.width,
@@ -53,6 +53,46 @@ impl Simulation {
                 crate::input::Sensor::Random => {
                     input.insert(sensor.clone(), random());
                 }
+                &crate::input::Sensor::Left => {
+                    input.insert(
+                        sensor.clone(),
+                        if self.mapper.has(rep.pos.0 - 1, rep.pos.1) {
+                            1.0
+                        } else {
+                            0.0
+                        },
+                    );
+                }
+                &crate::input::Sensor::Right => {
+                    input.insert(
+                        sensor.clone(),
+                        if self.mapper.has(rep.pos.0 + 1, rep.pos.1) {
+                            1.0
+                        } else {
+                            0.0
+                        },
+                    );
+                }
+                &crate::input::Sensor::Top => {
+                    input.insert(
+                        sensor.clone(),
+                        if self.mapper.has(rep.pos.0, rep.pos.1 + 1) {
+                            1.0
+                        } else {
+                            0.0
+                        },
+                    );
+                }
+                &crate::input::Sensor::Bottom => {
+                    input.insert(
+                        sensor.clone(),
+                        if self.mapper.has(rep.pos.0, rep.pos.1 - 1) {
+                            1.0
+                        } else {
+                            0.0
+                        },
+                    );
+                }
             });
             rep.net.tick(input);
             rep.time += 1;
@@ -66,41 +106,48 @@ impl Simulation {
                 }
                 match action {
                     crate::actions::Action::MovX => {
-                        self.mapper.move_rel(&mut rep.pos, (out.signum() as i32, 0))
+                        let m = out.signum() as i32;
+                        if rep.pos.0 + m < self.world.width && rep.pos.0 + m >= 0 {
+                            self.mapper.move_rel(&mut rep.pos, (m, 0));
+                        }
                     }
                     crate::actions::Action::MovY => {
-                        self.mapper.move_rel(&mut rep.pos, (0, out.signum() as i32))
+                        let m = out.signum() as i32;
+                        if rep.pos.1 + m < self.world.height && rep.pos.1 + m >= 0 {
+                            self.mapper.move_rel(&mut rep.pos, (0, m));
+                        }
                     }
                 };
-                if rep.pos.0 >= self.world.width {
-                    rep.pos.0 = self.world.width - 1
-                } else if rep.pos.0 < 0 {
-                    rep.pos.0 = 0
-                }
-                if rep.pos.1 >= self.world.height {
-                    rep.pos.1 = self.world.height - 1
-                } else if rep.pos.1 < 0 {
-                    rep.pos.1 = 0
-                }
             });
         });
     }
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
-struct CellMapper {
+pub struct CellMapper {
     filled_cells: HashSet<(i32, i32)>,
 }
 impl CellMapper {
+    pub fn has(&self, x: i32, y: i32) -> bool {
+        self.filled_cells.contains(&(x, y))
+    }
     pub fn move_rel(&mut self, current_pos: &mut (i32, i32), position: (i32, i32)) -> bool {
         let final_pos = (current_pos.0 + position.0, current_pos.1 + position.1);
         self.move_abs(current_pos, final_pos)
     }
     pub fn move_abs(&mut self, current_pos: &mut (i32, i32), final_pos: (i32, i32)) -> bool {
+        let cp = current_pos.clone();
+        if self.set(current_pos, final_pos) {
+            self.filled_cells.remove(&cp);
+            true
+        } else {
+            false
+        }
+    }
+    pub fn set(&mut self, current_pos: &mut (i32, i32), final_pos: (i32, i32)) -> bool {
         if self.filled_cells.contains(&final_pos) {
             false
         } else {
-            self.filled_cells.remove(&current_pos);
             self.filled_cells.insert(final_pos);
             current_pos.0 = final_pos.0;
             current_pos.1 = final_pos.1;
