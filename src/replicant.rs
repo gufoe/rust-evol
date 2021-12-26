@@ -15,19 +15,65 @@ pub struct Replicant {
 }
 
 impl Replicant {
+    pub fn dist(&self, rep: &Self) -> i32 {
+        (self.pos.0 - rep.pos.0).abs() + (self.pos.1 - rep.pos.1).abs()
+    }
     pub fn is_alive(&self, world: &World, map: &CellMapper) -> bool {
+        // return true;
         let x = self.pos.0;
         let y = self.pos.1;
         let px = self.pos.0 as f32;
         let py = self.pos.1 as f32;
         let w = world.width as f32;
         let h = world.height as f32;
-        return
-         map.has(x, y-1)
-         && !map.has(x, y-2);
-        //  || map.has(x-1, y)
-        //  || map.has(x, y+1)
-        //  || map.has(x, y-1)
+        // return self.pos.0 > world.width/2;
+        // || self.pos.0 < world.width/4;
+
+        if px > w * 0.95 {
+            return false;
+        }
+        if px < w * 0.05 {
+            return false;
+        }
+        if py > h * 0.95 {
+            return false;
+        }
+        if py < h * 0.05 {
+            return false;
+        }
+
+        return map.has(x-1, y) as u8
+            + map.has(x+1, y) as u8
+            + map.has(x, y+1) as u8
+            + map.has(x, y-1) as u8
+            == 3;
+
+        // let pool = self.net.pool();
+        // let has_friend_x = map.is(x - 1, y, pool) || map.is(x + 1, y, pool);
+        // let has_friend_y = map.is(x, y + 1, pool) || map.is(x, y - 1, pool);
+        // let has_friend = has_friend_x || has_friend_y;
+        // let has_enemy_x = (map.has(x - 1, y) && !map.is(x - 1, y, pool))
+        // || (map.has(x + 1, y) && !map.is(x + 1, y, pool));
+        // let has_enemy_y = (map.has(x, y + 1) && !map.is(x, y + 1, pool))
+        // || (map.has(x, y - 1) && !map.is(x, y - 1, pool));
+        // let has_enemy = has_enemy_x || has_enemy_y;
+        // // return has_enemy_x && has_friend_y;
+        // return has_friend && !has_enemy;
+
+        // return map.is(x - 1, y, pool);
+        // if self.net.pool() > 0 {
+        //     return
+        //         !map.has(x-1, y)
+        //     && !map.has(x+1, y)
+        //     && !map.has(x, y+1)
+        //     && !map.has(x, y-1)
+        // } else {
+        //     return
+        //         map.has(x-1, y)
+        //     || map.has(x+1, y)
+        //     || map.has(x, y+1)
+        //     || map.has(x, y-1)
+        // }
         // ;
         // return
         //  !map.has(x+1, y)
@@ -35,29 +81,20 @@ impl Replicant {
         //  && map.has(x, y+1)
         //  && !map.has(x, y-1)
         // ;
-        if px > w * 0.9 {
-            return false;
-        }
-        if px < w * 0.1 {
-            return false;
-        }
-        if py > h * 0.9 {
-            return false;
-        }
-        if py < h * 0.1 {
-            return false;
-        }
-        // return (map.has(x + 1, y) == map.has(x - 1, y) && map.has(x, y + 1) != map.has(x, y - 1));
-            // || (map.has(x + 1, y) != map.has(x - 1, y) && map.has(x, y + 1) == map.has(x, y - 1))
-            // || (map.has(x + 1, y) && map.has(x - 1, y) && !map.has(x, y + 1) && map.has(x, y - 1));
+        // return true;
+        // return
+        //  map.has(x, y-1)
+        //  && !map.has(x, y+1);
+        // return (map.has(x + 1, y) == map.has(x - 1, y) && map.has(x, y + 1) != map.has(x, y - 1))
+        //     || (map.has(x + 1, y) != map.has(x - 1, y) && map.has(x, y + 1) == map.has(x, y - 1));
         // let p = self.pos.0 as f32;
         // (-3.14*0.2 + p*0.6).sin() > 0.05
         // px > (world.width as f32)*0.2
         // && px < (world.width as f32)*0.8
         // && py > (world.height as f32)*0.2
         // && py < (world.height as f32)*0.8
-        py < world.height as f32 * 0.1
-            || (px > world.width as f32 * 0.8 && py > world.height as f32 * 0.8)
+        // py < world.height as f32 * 0.1
+        //     || (px > world.width as f32 * 0.8 && py > world.height as f32 * 0.8)
         // || px < world.width/10
         // ((px / 30) % 2 == 0)
         // && ((p.1 / 30) % 2 == 0)

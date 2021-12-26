@@ -23,10 +23,22 @@ impl Default for Neuron {
 
 impl Neuron {
     pub fn discharge(&mut self) {
-        self.charge *= 0.5;
+        self.charge *= 0.9;
     }
     pub fn output(&self) -> f32 {
         self.charge.tanh()
+    }
+    fn fires(&mut self) -> bool {
+        let out = self.output();
+        if out.abs() < 0.5 {
+            return false;
+        }
+        let fire = random::<f32>() < out.abs();
+        if !fire {
+            return false;
+        }
+        self.charge = 0.0;
+        true
     }
 }
 
@@ -95,8 +107,10 @@ pub struct Net {
 
 impl Default for Net {
     fn default() -> Self {
+        let mut color = [0.0; 3];
+        *color.get_mut(random::<usize>()%3).unwrap() = random::<f32>().abs();
         Self {
-            color: [random(), random(), random()],
+            color,
             input_links: Default::default(),
             hidden_links: Default::default(),
             nodes: Default::default(),
@@ -104,6 +118,17 @@ impl Default for Net {
     }
 }
 impl Net {
+    pub fn pool(&self) -> usize {
+        let c = self.color;
+        let max = c[0].max(c[1]).max(c[2]);
+        if c[0] == max {
+            0
+        } else if c[1] == max {
+            1
+        } else {
+            2
+        }
+    }
     // pub fn links(
     //     &self,
     // ) -> std::iter::Chain<
@@ -140,7 +165,7 @@ impl Net {
     pub fn randomize(&mut self) {
         let i = random::<usize>() % self.color.len();
         let c = self.color.get_mut(i).unwrap();
-        *c += (random::<f32>() * 2.0 - 1.0) * 0.6;
+        *c += (random::<f32>() * 2.0 - 1.0) * 0.3;
         if *c > 1.0 {
             *c = 1.0 - (*c - 1.0);
         }
@@ -148,15 +173,30 @@ impl Net {
             *c = c.abs();
         }
         *c = c.min(1.0).max(0.0);
+        let max = self.color[0].max(self.color[1]).max(self.color[2]);
+        for x in &mut self.color {
+            if *x != max {
+                *x -= 0.01;
+                *x = x.min(1.0).max(0.0);
+            }
+        }
 
-        for _ in 0..3 {
-            self.add_link_from_sensor(random(), NeuralTarget::Action(random()));
+        if random() {
+            for _ in 0..1 {
+                self.add_link_from_sensor(random(), NeuralTarget::Action(random()));
+            }
         }
-        for _ in 0..1 {
-            self.add_link_from_sensor(random(), NeuralTarget::Neuron(rand_h()));
+        if random() {
+            for _ in 0..1 {
+                self.add_link_from_sensor(random(), NeuralTarget::Neuron(rand_h()));
+            }
         }
-        for _ in 0..1 {
-            self.add_hidden_link(rand_h(), random());
+        if random() {
+            for _ in 0..1 {
+                let h = rand_h();
+                self.add_link_from_sensor(random(), NeuralTarget::Neuron(h.clone()));
+                self.add_hidden_link(h.clone(), random());
+            }
         }
         for _ in 0..(random::<usize>() % 1) {
             if self.hidden_links.is_empty() {
@@ -167,9 +207,18 @@ impl Net {
             let key = keys[i].clone();
             self.hidden_links.remove(&key).unwrap();
         }
+        for _ in 0..(random::<usize>() % 4) {
+            if self.input_links.is_empty() {
+                continue;
+            }
+            let keys: Vec<_> = self.input_links.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let key = keys[i].clone();
+            self.input_links.remove(&key).unwrap();
+        }
         self.update_nodes();
         self.clear();
-        print!("\r{:?}", self.nodes.hidden.len());
+        // print!("\r{:?}", self.nodes.hidden.len());
     }
     pub fn add_link_from_sensor(&mut self, source: Sensor, target: NeuralTarget) {
         let link = NeuralLink::new();
@@ -198,7 +247,7 @@ impl Net {
             }
         };
     }
-    pub fn tick(&mut self, input: HashMap<Sensor, f32>) {
+    pub fn tick(&mut self, input: HashMap<Sensor, f32>) -> Vec<Action> {
         let clone = self.clone();
         self.discharge();
         input.iter().for_each(|(sensor, x)| {
@@ -211,6 +260,14 @@ impl Net {
                 self.apply_synapse(output, links);
             }
         });
+
+        return self
+            .nodes
+            .output
+            .iter_mut()
+            .filter_map(|(k, n)| if n.fires() { Some(k) } else { None })
+            .cloned()
+            .collect();
     }
     fn apply_synapse(&mut self, x: f32, links: &HashMap<NeuralTarget, NeuralLink>) {
         links.iter().for_each(|(target, link)| {
@@ -261,42 +318,36 @@ impl HasGenome<NetGenome> for Net {
         ret
     }
 }
+impl NetGenome {
+    pub fn pool(&self) -> usize {
+        let c = self.color;
+        let max = c[0].max(c[1]).max(c[2]);
+        if c[0] == max {
+            0
+        } else if c[1] == max {
+            1
+        } else {
+            2
+        }
+    }
+}
 impl Genome for NetGenome {
     fn mix(&self, p2: &NetGenome) -> NetGenome {
         let mut ret = self.clone();
-        let i: usize = random::<usize>() % ret.color.len();
-        ret.color[i] = ret.color[i] * 0.3 + p2.color[i] * 0.7;
-        // ret.color[i] = ret.color[i] * 0.01 + p2.color[i] * 0.99;
+        // let i = self.pool();
+        let i = random::<usize>() % 3;
+        // ret.color[i] = ret.color[i] * 0.3 + p2.color[i] * 0.7;
+        ret.color[i] = ret.color[i] * 0.1 + p2.color[i] * 0.9;
         // ret.color[i] = p2.color[i];
         // return ret;
         for (i, links) in &p2.input_links {
-            for (target, link) in links {
-                if random() {
-                    if !ret.input_links.contains_key(i) {
-                        ret.input_links.insert(*i, HashMap::new());
-                    }
-                    ret.input_links
-                        .get_mut(i)
-                        .unwrap()
-                        .insert(target.clone(), link.clone());
-                } else if ret.input_links.contains_key(i) && random() {
-                    ret.input_links.remove(i);
-                }
+            if random() {
+                ret.input_links.insert(i.clone(), links.clone());
             }
         }
         for (i, links) in &p2.hidden_links {
-            for (target, link) in links {
-                if random() {
-                    if !ret.hidden_links.contains_key(i) {
-                        ret.hidden_links.insert(i.clone(), HashMap::new());
-                    }
-                    ret.hidden_links
-                        .get_mut(i)
-                        .unwrap()
-                        .insert(target.clone(), link.clone());
-                } else if ret.hidden_links.contains_key(i) && random() {
-                    ret.hidden_links.remove(i);
-                }
+            if random() {
+                ret.hidden_links.insert(i.clone(), links.clone());
             }
         }
         ret

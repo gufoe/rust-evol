@@ -3,15 +3,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum Action {
-    MovX,
-    MovY,
+    IncX,
+    DecX,
+    IncY,
+    DecY,
 }
 
 impl Distribution<Action> for Standard {
     fn sample<R: Rng + ?Sized>(&self, _rng: &mut R) -> Action {
         let actions = [
-            Action::MovX,
-            Action::MovY,
+            Action::IncX,
+            Action::DecX,
+            Action::IncY,
+            Action::DecY,
         ];
         let i = random::<usize>() % actions.len();
         *actions.get( i).unwrap()

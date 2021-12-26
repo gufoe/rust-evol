@@ -15,6 +15,7 @@ mod replicant;
 mod server;
 mod simulation;
 mod world;
+mod rng;
 
 /// A fictional versioning CLI
 #[derive(Debug, StructOpt)]
