@@ -33,8 +33,8 @@ fn ui_builder() -> impl Widget<MyData> {
         .with_child(
             Button::new("Go faster")
                 .on_click(|_ctx, data: &mut MyData, _env| {
-                    data.tps = data.tps * 2.0;
-                    if data.tps > 1000.0 {
+                    data.tps = data.tps * 5.0;
+                    if data.tps > 10000.0 {
                         data.tps = 10.0
                     }
                 })

@@ -24,3 +24,7 @@ where
     self::seed(seed);
     RNG.lock().unwrap().gen()
 }
+
+pub fn rand_f32() -> f32 {
+    rand::random::<f32>() * 2.0 - 1.0
+}

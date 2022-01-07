@@ -15,7 +15,7 @@ pub struct Simulation {
 
 impl Simulation {
     pub fn setup(&mut self) {
-        self.mapper = CellMapper::default();
+        self.mapper.reset();
         self.replicants.iter_mut().for_each(|rep| {
             while !self.mapper.add_abs(
                 &mut rep.pos,
@@ -56,6 +56,12 @@ impl Simulation {
                     crate::input::Sensor::Random => {
                         input.insert(sensor.clone(), random());
                     }
+                    crate::input::Sensor::Alive => {
+                        input.insert(
+                            sensor.clone(),
+                            rep.is_alive(&self.world, &self.mapper) as u8 as f32,
+                        );
+                    }
                     crate::input::Sensor::Neighbour { vert, incr, kind } => {
                         let mut check = rep.pos;
                         let p = if vert { &mut check.1 } else { &mut check.0 };
@@ -84,23 +90,27 @@ impl Simulation {
             actions.iter().for_each(|action| {
                 match action {
                     crate::actions::Action::IncX => {
-                        if rep.pos.0 + 1 < self.world.width {
+                        if self.mapper.clip.is_some() || rep.pos.0 + 1 < self.world.width {
                             self.mapper.move_rel(&mut rep.pos, (1, 0), rep.net.pool());
+                            rep.moves+=1;
                         }
                     }
                     crate::actions::Action::IncY => {
-                        if rep.pos.1 + 1 < self.world.height {
+                        if self.mapper.clip.is_some() || rep.pos.1 + 1 < self.world.height {
                             self.mapper.move_rel(&mut rep.pos, (0, 1), rep.net.pool());
+                            rep.moves+=1;
                         }
                     }
                     crate::actions::Action::DecX => {
-                        if rep.pos.0 - 1 > 0 {
+                        if self.mapper.clip.is_some() || rep.pos.0 - 1 > 0 {
                             self.mapper.move_rel(&mut rep.pos, (-1, 0), rep.net.pool());
+                            rep.moves+=1;
                         }
                     }
                     crate::actions::Action::DecY => {
-                        if rep.pos.1 - 1 > 0 {
+                        if self.mapper.clip.is_some() || rep.pos.1 - 1 > 0 {
                             self.mapper.move_rel(&mut rep.pos, (0, -1), rep.net.pool());
+                            rep.moves+=1;
                         }
                     }
                 };
@@ -111,18 +121,54 @@ impl Simulation {
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct CellMapper {
+    pub clip: Option<(i32, i32)>,
     filled_cells: HashMap<(i32, i32), usize>,
 }
 impl CellMapper {
+    pub fn reset(&mut self) {
+        self.filled_cells.clear();
+    }
+    pub fn normalize(&self, x: i32, y: i32) -> (i32, i32) {
+        match self.clip {
+            None => (x, y),
+            Some((w, h)) => (
+                if x >= w {
+                    x - w
+                } else if x < 0 {
+                    x + w
+                } else {
+                    x
+                },
+                if y >= h {
+                    y - h
+                } else if y < 0 {
+                    y + h
+                } else {
+                    y
+                },
+            ),
+        }
+    }
     pub fn has(&self, x: i32, y: i32) -> bool {
+        let (x, y) = self.normalize(x, y);
         self.filled_cells.contains_key(&(x, y))
     }
     pub fn is(&self, x: i32, y: i32, pool: usize) -> bool {
+        let (x, y) = self.normalize(x, y);
         let x = self.filled_cells.get(&(x, y));
         if x.is_none() {
             false
         } else {
             *x.unwrap() == pool
+        }
+    }
+    pub fn isexcept(&self, x: i32, y: i32, pool: usize) -> bool {
+        let (x, y) = self.normalize(x, y);
+        let x = self.filled_cells.get(&(x, y));
+        if x.is_none() {
+            false
+        } else {
+            *x.unwrap() != pool
         }
     }
     pub fn move_rel(
@@ -140,7 +186,7 @@ impl CellMapper {
         final_pos: (i32, i32),
         pool: usize,
     ) -> bool {
-        let cp = current_pos.clone();
+        let final_pos = self.normalize(final_pos.0, final_pos.1);
         if self.filled_cells.contains_key(&final_pos) {
             false
         } else {
@@ -157,7 +203,7 @@ impl CellMapper {
         final_pos: (i32, i32),
         pool: usize,
     ) -> bool {
-        let cp = current_pos.clone();
+        let final_pos = self.normalize(final_pos.0, final_pos.1);
         if self.filled_cells.contains_key(&final_pos) {
             false
         } else {

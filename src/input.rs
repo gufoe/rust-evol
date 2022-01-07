@@ -36,6 +36,7 @@ pub enum Sensor {
     },
     Bias(i8),
     Random,
+    Alive,
     // Life,
 }
 
@@ -51,7 +52,7 @@ impl Distribution<Sensor> for Standard {
                 incr: random(),
                 kind: random(),
             },
-            // Sensor::Life,
+            Sensor::Alive,
         ];
         let i = random::<usize>() % actions.len();
         *actions.get(i).unwrap()

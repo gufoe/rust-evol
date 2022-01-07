@@ -7,6 +7,7 @@ use crate::{
     actions::Action,
     genome::{Genome, HasGenome},
     input::Sensor,
+    rng::rand_f32,
 };
 
 type NeuronID = String;
@@ -23,7 +24,7 @@ impl Default for Neuron {
 
 impl Neuron {
     pub fn discharge(&mut self) {
-        self.charge *= 0.9;
+        self.charge *= 0.5;
     }
     pub fn output(&self) -> f32 {
         self.charge.tanh()
@@ -57,7 +58,7 @@ pub struct NeuralLink {
 impl NeuralLink {
     fn new() -> Self {
         Self {
-            weight: rand::random::<f32>() * 4.0,
+            weight: rand_f32() * 4.0,
             inverse: random(),
         }
     }
@@ -92,7 +93,7 @@ impl NetNodes {
 }
 
 fn rand_h() -> NeuronID {
-    format!("h-{}", random::<usize>() % 10)
+    format!("h-{}", random::<usize>() % 3)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -108,7 +109,7 @@ pub struct Net {
 impl Default for Net {
     fn default() -> Self {
         let mut color = [0.0; 3];
-        *color.get_mut(random::<usize>()%3).unwrap() = random::<f32>().abs();
+        *color.get_mut(random::<usize>() % 3).unwrap() = random::<f32>().abs();
         Self {
             color,
             input_links: Default::default(),
@@ -165,7 +166,7 @@ impl Net {
     pub fn randomize(&mut self) {
         let i = random::<usize>() % self.color.len();
         let c = self.color.get_mut(i).unwrap();
-        *c += (random::<f32>() * 2.0 - 1.0) * 0.3;
+        *c += (random::<f32>() * 2.0 - 1.0) * 0.2;
         if *c > 1.0 {
             *c = 1.0 - (*c - 1.0);
         }
@@ -180,6 +181,8 @@ impl Net {
                 *x = x.min(1.0).max(0.0);
             }
         }
+        // self.add_link_from_sensor(random(), NeuralTarget::Action(random()));
+        // return;
 
         if random() {
             for _ in 0..1 {
@@ -198,7 +201,7 @@ impl Net {
                 self.add_hidden_link(h.clone(), random());
             }
         }
-        for _ in 0..(random::<usize>() % 1) {
+        for _ in 0..(random::<usize>() % 2) {
             if self.hidden_links.is_empty() {
                 continue;
             }
@@ -207,7 +210,7 @@ impl Net {
             let key = keys[i].clone();
             self.hidden_links.remove(&key).unwrap();
         }
-        for _ in 0..(random::<usize>() % 4) {
+        for _ in 0..(random::<usize>() % 2) {
             if self.input_links.is_empty() {
                 continue;
             }
@@ -291,13 +294,48 @@ impl Net {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize)]
 pub struct NetGenome {
     pub color: [f32; 3],
     pub input_links: HashMap<Sensor, HashMap<NeuralTarget, NeuralLink>>,
     pub hidden_links: HashMap<NeuronID, HashMap<NeuralTarget, NeuralLink>>,
 }
 
+impl NetGenome {
+    pub fn value(&self) -> serde_json::Value {
+        let mut value = serde_json::json!({});
+        value["color"] = serde_json::to_value(self.color).unwrap();
+        let links: Vec<_> = self
+            .input_links
+            .iter()
+            .map(|(sensor, links)| {
+                (
+                    sensor,
+                    links
+                        .iter()
+                        .map(|(i, v)| (i.clone(), v.clone()))
+                        .collect::<Vec<(NeuralTarget, NeuralLink)>>(),
+                )
+            })
+            .collect();
+        value["input"] = serde_json::to_value(links).unwrap();
+        let links: Vec<_> = self
+            .hidden_links
+            .iter()
+            .map(|(sensor, links)| {
+                (
+                    sensor,
+                    links
+                        .iter()
+                        .map(|(i, v)| (i.clone(), v.clone()))
+                        .collect::<Vec<(NeuralTarget, NeuralLink)>>(),
+                )
+            })
+            .collect();
+        value["hidden"] = serde_json::to_value(links).unwrap();
+        value
+    }
+}
 impl HasGenome<NetGenome> for Net {
     fn to_genome(&self) -> NetGenome {
         NetGenome {

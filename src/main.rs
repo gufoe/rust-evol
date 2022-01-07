@@ -24,23 +24,22 @@ mod rng;
 struct Cli {
     #[structopt(short, long)]
     render: bool,
-    file: PathBuf,
+    file: Option<PathBuf>,
 }
 
 fn main() {
     let args = Cli::from_args();
 
-    let mut server: Server = if let Ok(content) = std::fs::read(&args.file) {
+    let mut server: Server = if let Ok(content) = std::fs::read(&args.file.clone().unwrap_or("xxx".into())) {
         let mut server: Server = bincode::deserialize(&content).unwrap();
         server.sim.replicants.iter_mut().for_each(|x| x.net.update_nodes());
         server
     } else {
         let mut server = Server::default();
-        server.setup();
         server
     };
 
-    server.auto_save = Some(args.file);
+    server.auto_save = args.file;
 
     if args.render {
         Render::new(server);
