@@ -302,8 +302,13 @@ impl Net {
 #[derive(Default, Clone, Serialize)]
 pub struct NetGenome {
     pub color: [f32; 3],
-    pub input_links: HashMap<Sensor, HashMap<NeuralTarget, NeuralLink>>,
-    pub hidden_links: HashMap<NeuronID, HashMap<NeuralTarget, NeuralLink>>,
+    pub links: HashMap<NeuralSource, HashMap<NeuralTarget, NeuralLink>>,
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Serialize)]
+pub enum NeuralSource {
+    Sensor(Sensor),
+    Hidden(NeuronID),
 }
 
 impl NetGenome {
@@ -311,11 +316,11 @@ impl NetGenome {
         let mut value = serde_json::json!({});
         value["color"] = serde_json::to_value(self.color).unwrap();
         let links: Vec<_> = self
-            .input_links
+            .links
             .iter()
-            .map(|(sensor, links)| {
+            .map(|(source, links)| {
                 (
-                    sensor,
+                    source,
                     links
                         .iter()
                         .map(|(i, v)| (i.clone(), v.clone()))
@@ -323,38 +328,44 @@ impl NetGenome {
                 )
             })
             .collect();
-        value["input"] = serde_json::to_value(links).unwrap();
-        let links: Vec<_> = self
-            .hidden_links
-            .iter()
-            .map(|(sensor, links)| {
-                (
-                    sensor,
-                    links
-                        .iter()
-                        .map(|(i, v)| (i.clone(), v.clone()))
-                        .collect::<Vec<(NeuralTarget, NeuralLink)>>(),
-                )
-            })
-            .collect();
-        value["hidden"] = serde_json::to_value(links).unwrap();
+        value["links"] = serde_json::to_value(links).unwrap();
         value
     }
 }
 impl HasGenome<NetGenome> for Net {
     fn to_genome(&self) -> NetGenome {
+        let mut links = HashMap::new();
+        self.input_links.iter().for_each(|(source, targets)| {
+            links.insert(NeuralSource::Sensor(source.clone()), targets.clone());
+        });
+        self.hidden_links.iter().for_each(|(source, targets)| {
+            links.insert(NeuralSource::Hidden(source.clone()), targets.clone());
+        });
         NetGenome {
             color: self.color.clone(),
-            input_links: self.input_links.clone(),
-            hidden_links: self.hidden_links.clone(),
+            links,
         }
     }
 
     fn from_genome(genome: &NetGenome) -> Self {
         let mut ret = Net {
             color: genome.color.clone(),
-            input_links: genome.input_links.clone(),
-            hidden_links: genome.hidden_links.clone(),
+            input_links: genome
+                .links
+                .iter()
+                .filter_map(|(source, links)| match source {
+                    NeuralSource::Hidden(_) => None,
+                    NeuralSource::Sensor(source) => Some((source.clone(), links.clone())),
+                })
+                .collect(),
+            hidden_links: genome
+                .links
+                .iter()
+                .filter_map(|(source, links)| match source {
+                    NeuralSource::Sensor(_) => None,
+                    NeuralSource::Hidden(source) => Some((source.clone(), links.clone())),
+                })
+                .collect(),
             ..Default::default()
         };
         ret.update_nodes();
@@ -383,14 +394,9 @@ impl Genome for NetGenome {
         ret.color[i] = ret.color[i] * 0.1 + p2.color[i] * 0.9;
         // ret.color[i] = p2.color[i];
         // return ret;
-        for (i, links) in &p2.input_links {
+        for (i, links) in &p2.links {
             if random() {
-                ret.input_links.insert(i.clone(), links.clone());
-            }
-        }
-        for (i, links) in &p2.hidden_links {
-            if random() {
-                ret.hidden_links.insert(i.clone(), links.clone());
+                ret.links.insert(i.clone(), links.clone());
             }
         }
         ret
