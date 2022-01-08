@@ -43,12 +43,6 @@ impl Neuron {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, PartialEq, Eq)]
-pub enum NeuralTarget {
-    Neuron(NeuronID),
-    Action(Action),
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NeuralLink {
     pub inverse: bool,
@@ -97,11 +91,15 @@ fn rand_h() -> NeuronID {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NeuralNode {
+    pub outputs: HashMap<NeuralTarget, NeuralLink>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Net {
     // pub input_neurons: HashMap<Sensor, Neuron>,
-    pub input_links: HashMap<Sensor, HashMap<NeuralTarget, NeuralLink>>,
-
-    pub hidden_links: HashMap<NeuronID, HashMap<NeuralTarget, NeuralLink>>,
+    pub input_links: HashMap<Sensor, NeuralNode>,
+    pub hidden_links: HashMap<NeuronID, NeuralNode>,
     pub nodes: NetNodes,
     pub color: [f32; 3],
 }
@@ -145,12 +143,12 @@ impl Net {
     pub fn update_nodes(&mut self) {
         self.nodes = NetNodes::default();
         for links in self.input_links.values() {
-            for (target, link) in links {
+            for (target, _link) in &links.outputs {
                 self.nodes.create_link_node(&target);
             }
         }
         for links in self.hidden_links.values() {
-            for (target, link) in links {
+            for (target, _link) in &links.outputs {
                 self.nodes.create_link_node(&target);
             }
         }
@@ -232,12 +230,13 @@ impl Net {
         let link = NeuralLink::new();
         match self.input_links.get_mut(&source) {
             Some(links) => {
-                links.insert(target, link);
+                links.outputs.insert(target, link);
             }
             None => {
                 let mut links = HashMap::new();
                 links.insert(target, link);
-                self.input_links.insert(source, links);
+                self.input_links
+                    .insert(source, NeuralNode { outputs: links });
             }
         };
     }
@@ -246,12 +245,13 @@ impl Net {
         let target = NeuralTarget::Action(action);
         match self.hidden_links.get_mut(&source) {
             Some(links) => {
-                links.insert(target, link);
+                links.outputs.insert(target, link);
             }
             None => {
                 let mut links = HashMap::new();
                 links.insert(target, link);
-                self.hidden_links.insert(source, links);
+                self.hidden_links
+                    .insert(source, NeuralNode { outputs: links });
             }
         };
     }
@@ -260,12 +260,12 @@ impl Net {
         self.discharge();
         input.iter().for_each(|(sensor, x)| {
             let links = clone.input_links.get(sensor).unwrap();
-            self.apply_synapse(*x, links);
+            self.apply_synapse(*x, &links.outputs);
         });
         clone.hidden_links.iter().for_each(|(source, links)| {
             if let Some(x) = clone.nodes.hidden.get(source) {
                 let output = x.output();
-                self.apply_synapse(output, links);
+                self.apply_synapse(output, &links.outputs);
             }
         });
 
@@ -302,13 +302,19 @@ impl Net {
 #[derive(Default, Clone, Serialize)]
 pub struct NetGenome {
     pub color: [f32; 3],
-    pub links: HashMap<NeuralSource, HashMap<NeuralTarget, NeuralLink>>,
+    pub links: HashMap<NeuralSource, NeuralNode>,
 }
 
-#[derive(Hash, PartialEq, Eq, Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum NeuralSource {
     Sensor(Sensor),
     Hidden(NeuronID),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, PartialEq, Eq)]
+pub enum NeuralTarget {
+    Neuron(NeuronID),
+    Action(Action),
 }
 
 impl NetGenome {
@@ -321,7 +327,7 @@ impl NetGenome {
             .map(|(source, links)| {
                 (
                     source,
-                    links
+                    links.outputs
                         .iter()
                         .map(|(i, v)| (i.clone(), v.clone()))
                         .collect::<Vec<(NeuralTarget, NeuralLink)>>(),

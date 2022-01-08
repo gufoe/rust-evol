@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     genome::{Genome, HasGenome},
-    net::NetGenome,
+    net::{NeuralLink, NeuralSource, NeuralTarget},
+    pool::GenePool,
     replicant::Replicant,
     simulation::Simulation,
 };
@@ -17,6 +18,7 @@ pub struct Server {
     pub generation: usize,
     pub time: usize,
     pub sim: Simulation,
+    // pub gene_pools: HashMap<usize, GenePool<NeuralSource, HashMap<NeuralTarget, NeuralLink>>>,
     pub pop_size: usize,
     pub prev_survival: [usize; 3],
 }

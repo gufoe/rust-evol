@@ -7,6 +7,7 @@ use server::Server;
 use structopt::StructOpt;
 
 mod actions;
+mod pool;
 mod genome;
 mod input;
 mod net;
