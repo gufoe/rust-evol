@@ -1,4 +1,7 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+};
 
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -7,6 +10,7 @@ use crate::{
     actions::Action,
     genome::{Genome, HasGenome},
     input::Sensor,
+    pool::{Allele, AlleleID},
     rng::rand_f32,
 };
 
@@ -47,6 +51,16 @@ impl Neuron {
 pub struct NeuralLink {
     pub inverse: bool,
     pub weight: f32,
+}
+
+impl Hash for NeuralLink {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.inverse.hash(state);
+        ((self.weight * 100.0).round() as i32).hash(state);
+    }
 }
 
 impl NeuralLink {
@@ -93,6 +107,36 @@ fn rand_h() -> NeuronID {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NeuralNode {
     pub outputs: HashMap<NeuralTarget, NeuralLink>,
+}
+impl Hash for NeuralNode {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        for (target, link) in &self.outputs {
+            target.hash(state);
+            link.hash(state);
+        }
+    }
+}
+
+impl Allele<NeuralSource> for NeuralNode {
+    fn get_allele_id(&self) -> AlleleID {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        s.finish()
+    }
+    fn get_gene_requirements(&self) -> Vec<NeuralSource> {
+        self.outputs
+            .iter()
+            .filter_map(|(target, _link)| {
+                match target {
+                    NeuralTarget::Neuron(x) => Some(NeuralSource::Hidden(x.clone())),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -327,7 +371,8 @@ impl NetGenome {
             .map(|(source, links)| {
                 (
                     source,
-                    links.outputs
+                    links
+                        .outputs
                         .iter()
                         .map(|(i, v)| (i.clone(), v.clone()))
                         .collect::<Vec<(NeuralTarget, NeuralLink)>>(),

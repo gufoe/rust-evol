@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     genome::{Genome, HasGenome},
-    net::{NeuralLink, NeuralSource, NeuralTarget},
+    net::{NetGenome, NeuralNode, NeuralSource},
     pool::GenePool,
     replicant::Replicant,
     simulation::Simulation,
@@ -18,7 +18,7 @@ pub struct Server {
     pub generation: usize,
     pub time: usize,
     pub sim: Simulation,
-    // pub gene_pools: HashMap<usize, GenePool<NeuralSource, HashMap<NeuralTarget, NeuralLink>>>,
+    pub gene_pools: HashMap<usize, GenePool<NeuralSource, NeuralNode>>,
     pub pop_size: usize,
     pub prev_survival: [usize; 3],
 }
@@ -52,14 +52,17 @@ impl Server {
                 let clone = self.clone();
                 thread::spawn(move || {
                     let tmp_file = format!("{}-tmp", &path.to_string_lossy());
-                    let tmp_file_json = format!("{}.json", &path.to_string_lossy());
+                    let tmp_file_json = format!("{}.repl.json", &path.to_string_lossy());
+                    // let tmp_file_json_pool = format!("{}.pool.json", &path.to_string_lossy());
                     let ser = bincode::serialize(&clone).unwrap();
                     std::fs::write(&tmp_file, &ser).unwrap();
                     std::fs::rename(&tmp_file, &path).unwrap();
                     let ser =
                         serde_json::to_string_pretty(&clone.sim.replicants[0].to_genome().value())
                             .unwrap();
+                    // let pool = serde_json::to_string_pretty(&clone.gene_pools).unwrap();
                     std::fs::write(&tmp_file_json, &ser).unwrap();
+                    // std::fs::write(&tmp_file_json_pool, &pool).unwrap();
                 });
             }
         }
@@ -76,7 +79,7 @@ impl Server {
         self.time += 1;
     }
 
-    fn get_alive_dead(&self) -> HashMap<usize, (Vec<usize>, Vec<usize>)> {
+    fn _get_alive_dead(&self) -> HashMap<usize, (Vec<usize>, Vec<usize>)> {
         let mut ret = HashMap::new();
 
         self.sim
@@ -132,8 +135,37 @@ impl Server {
         ret
     }
 
+    fn score_genes(&mut self) {
+        for rep in &self.sim.replicants {
+            let pool = rep.net.pool();
+            if !self.gene_pools.contains_key(&pool) {
+                self.gene_pools.insert(pool, GenePool::new());
+            }
+            let pool = self.gene_pools.get_mut(&pool).unwrap();
+
+            for (source, node) in &rep.net.input_links {
+                pool.record(
+                    &NeuralSource::Sensor(source.clone()),
+                    node,
+                    rep.is_alive(&self.sim.world, &self.sim.mapper) as u8 as f32,
+                )
+            }
+            for (source, node) in &rep.net.hidden_links {
+                pool.record(
+                    &NeuralSource::Hidden(source.clone()),
+                    node,
+                    rep.is_alive(&self.sim.world, &self.sim.mapper) as u8 as f32,
+                )
+            }
+        }
+    }
+
     fn finish_round(&mut self) {
-        // println!("Replicants: {:#?}", self.sim.replicants);
+        self.score_genes();
+        self.print_pools_stats();
+        self.replace_replicants_v2();
+    }
+    fn print_pools_stats(&mut self) {
         let pools = self.get_pools();
         println!(
             "{:.3} {:.3} {:.3}",
@@ -141,6 +173,35 @@ impl Server {
             (pools.get(&1).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
             (pools.get(&2).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
         );
+    }
+    fn replace_replicants_v2(&mut self) {
+        self.sim.replicants.clear();
+        for (pool_i, pool) in &self.gene_pools {
+            for _ in 0..self.pop_size / self.gene_pools.len() {
+                let mut genome = NetGenome::default();
+                let alleles = pool.build(pool.get_genes());
+                genome.links = alleles;
+                genome.color = [0.0, 0.0, 0.0];
+                *genome.color.get_mut(*pool_i).unwrap() = 1.0;
+                let pmut = if *pool_i == 0 {
+                    0.9
+                } else if *pool_i == 1 {
+                    0.95
+                } else {
+                    0.99
+                };
+                let mut child = Replicant::from_genome(&genome);
+                if random::<f32>() > pmut {
+                    child.net.randomize();
+                }
+                self.sim.replicants.push(child);
+            }
+        }
+    }
+    fn _replace_replicants(&mut self) {
+        // println!("Replicants: {:#?}", self.sim.replicants);
+        let pools = self.get_pools();
+
         let mut new_reps: Vec<Replicant> = vec![];
         for i in 0..self.pop_size {
             let x = i % pools.len();
