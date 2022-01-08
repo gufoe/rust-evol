@@ -35,54 +35,50 @@ impl Simulation {
             .par_iter_mut()
             .enumerate()
             .map(|(rep_i, rep)| {
-                let mut input = HashMap::new();
-                rep.net.input_links.keys().for_each(|sensor| match *sensor {
-                    crate::input::Sensor::Loc { x } => {
-                        input.insert(
-                            sensor.clone(),
-                            if x {
+                let is_alive = rep.is_alive(&self.world, &self.mapper);
+                let pool = rep.net.pool();
+                rep.net
+                    .sensors
+                    .iter_mut()
+                    .for_each(|(sensor, value)| match sensor {
+                        crate::input::Sensor::Loc { x } => {
+                            *value = if *x {
                                 (rep.pos.0 as f32) / (self.world.width as f32) - 0.5
                             } else {
                                 (rep.pos.1 as f32) / (self.world.height as f32) - 0.5
-                            },
-                        );
-                    }
-                    crate::input::Sensor::Osc(x) => {
-                        input.insert(sensor.clone(), (rep.time as f32 / (x + 1) as f32).sin());
-                    }
-                    crate::input::Sensor::Bias(x) => {
-                        input.insert(sensor.clone(), (x / i8::MAX).into());
-                    }
-                    crate::input::Sensor::Random => {
-                        input.insert(sensor.clone(), random());
-                    }
-                    crate::input::Sensor::Alive => {
-                        input.insert(
-                            sensor.clone(),
-                            rep.is_alive(&self.world, &self.mapper) as u8 as f32,
-                        );
-                    }
-                    crate::input::Sensor::Neighbour { vert, incr, kind } => {
-                        let mut check = rep.pos;
-                        let p = if vert { &mut check.1 } else { &mut check.0 };
-                        *p += if incr { 1 } else { -1 };
+                            };
+                        }
+                        crate::input::Sensor::Osc(x) => {
+                            *value = (rep.time as f32 / (x + 1) as f32).sin();
+                        }
+                        crate::input::Sensor::Bias(x) => {
+                            *value = (x / i8::MAX).into();
+                        }
+                        crate::input::Sensor::Random => {
+                            *value = random();
+                        }
+                        crate::input::Sensor::Alive => {
+                            *value = is_alive as u8 as f32;
+                        }
+                        crate::input::Sensor::Neighbour { vert, incr, kind } => {
+                            let mut check = rep.pos;
+                            let p = if *vert { &mut check.1 } else { &mut check.0 };
+                            *p += if *incr { 1 } else { -1 };
 
-                        let ok = match kind {
-                            NeighbourType::Any => self.mapper.has(check.0, check.1),
-                            NeighbourType::Empty => !self.mapper.has(check.0, check.1),
-                            NeighbourType::Pool(pool) => self.mapper.is(check.0, check.1, pool),
-                            NeighbourType::Friend => {
-                                self.mapper.is(check.0, check.1, rep.net.pool())
-                            }
-                            NeighbourType::Enemy => {
-                                !self.mapper.is(check.0, check.1, rep.net.pool())
-                            }
-                        };
-                        input.insert(sensor.clone(), if ok { 1.0 } else { 0.0 });
-                    }
-                });
+                            let ok = match kind {
+                                NeighbourType::Any => self.mapper.has(check.0, check.1),
+                                NeighbourType::Empty => !self.mapper.has(check.0, check.1),
+                                NeighbourType::Pool(pool) => {
+                                    self.mapper.is(check.0, check.1, *pool)
+                                }
+                                NeighbourType::Friend => self.mapper.is(check.0, check.1, pool),
+                                NeighbourType::Enemy => !self.mapper.is(check.0, check.1, pool),
+                            };
+                            *value = if ok { 1.0 } else { 0.0 };
+                        }
+                    });
                 rep.time += 1;
-                (rep_i, rep.net.tick(input))
+                (rep_i, rep.net.tick())
             })
             .collect::<Vec<_>>();
         actions.iter().for_each(|(rep_i, actions)| {
@@ -92,25 +88,25 @@ impl Simulation {
                     crate::actions::Action::IncX => {
                         if self.mapper.clip.is_some() || rep.pos.0 + 1 < self.world.width {
                             self.mapper.move_rel(&mut rep.pos, (1, 0), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                     crate::actions::Action::IncY => {
                         if self.mapper.clip.is_some() || rep.pos.1 + 1 < self.world.height {
                             self.mapper.move_rel(&mut rep.pos, (0, 1), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                     crate::actions::Action::DecX => {
                         if self.mapper.clip.is_some() || rep.pos.0 - 1 > 0 {
                             self.mapper.move_rel(&mut rep.pos, (-1, 0), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                     crate::actions::Action::DecY => {
                         if self.mapper.clip.is_some() || rep.pos.1 - 1 > 0 {
                             self.mapper.move_rel(&mut rep.pos, (0, -1), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                 };

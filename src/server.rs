@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     genome::{Genome, HasGenome},
-    net::{NetGenome, NeuralNode, NeuralSource},
+    net::{NetGenome, NeuralNode, NeuralSource, NeuralTarget},
     pool::GenePool,
     replicant::Replicant,
     simulation::Simulation,
@@ -18,7 +18,7 @@ pub struct Server {
     pub generation: usize,
     pub time: usize,
     pub sim: Simulation,
-    pub gene_pools: HashMap<usize, GenePool<NeuralSource, NeuralNode>>,
+    pub gene_pools: HashMap<usize, GenePool<NeuralTarget, NeuralNode>>,
     pub pop_size: usize,
     pub prev_survival: [usize; 3],
 }
@@ -33,8 +33,9 @@ impl Server {
         // eprintln!("[server] init {}", self.generation);
         if self.generation == 0 {
             for _ in 0..self.pop_size {
-                let mut rep = Replicant::default();
-                rep.net.randomize();
+                let mut genome = NetGenome::default();
+                genome.randomize();
+                let rep = Replicant::from_genome(&genome);
                 self.sim.replicants.push(rep);
             }
         }
@@ -143,16 +144,9 @@ impl Server {
             }
             let pool = self.gene_pools.get_mut(&pool).unwrap();
 
-            for (source, node) in &rep.net.input_links {
+            for (source, node) in &rep.net.nodes {
                 pool.record(
-                    &NeuralSource::Sensor(source.clone()),
-                    node,
-                    rep.is_alive(&self.sim.world, &self.sim.mapper) as u8 as f32,
-                )
-            }
-            for (source, node) in &rep.net.hidden_links {
-                pool.record(
-                    &NeuralSource::Hidden(source.clone()),
+                    source,
                     node,
                     rep.is_alive(&self.sim.world, &self.sim.mapper) as u8 as f32,
                 )
@@ -180,7 +174,7 @@ impl Server {
             for _ in 0..self.pop_size / self.gene_pools.len() {
                 let mut genome = NetGenome::default();
                 let alleles = pool.build(pool.get_genes());
-                genome.links = alleles;
+                genome.nodes = alleles;
                 genome.color = [0.0, 0.0, 0.0];
                 *genome.color.get_mut(*pool_i).unwrap() = 1.0;
                 let pmut = if *pool_i == 0 {
@@ -190,10 +184,10 @@ impl Server {
                 } else {
                     0.99
                 };
-                let mut child = Replicant::from_genome(&genome);
                 if random::<f32>() > pmut {
-                    child.net.randomize();
+                    genome.randomize();
                 }
+                let mut child = Replicant::from_genome(&genome);
                 self.sim.replicants.push(child);
             }
         }
@@ -211,7 +205,7 @@ impl Server {
             if !pool.is_empty() {
                 let parent_ai = random::<usize>() % pool.len();
                 let parent_a = pool.get(parent_ai).unwrap();
-                let mut child = if random::<f32>() > 0.9 {
+                let mut genome = if random::<f32>() > 0.9 {
                     // let parent_b = pool.get(&random() % pool.len()).unwrap();
                     let mut parent_b = pool.get(0).unwrap();
                     for (parent_bi, rep) in pool.iter().enumerate() {
@@ -222,9 +216,9 @@ impl Server {
                             parent_b = rep;
                         }
                     }
-                    Replicant::from_genome(&parent_a.to_genome().mix(&parent_b.to_genome()))
+                    parent_a.to_genome().mix(&parent_b.to_genome())
                 } else {
-                    parent_a.clone()
+                    parent_a.to_genome()
                 };
 
                 let pmut = if x == 0 {
@@ -235,12 +229,12 @@ impl Server {
                     0.99
                 };
                 if random::<f32>() > pmut {
-                    child.net.randomize();
+                    genome.randomize();
                 }
-                new_reps.push(child);
+                new_reps.push(Replicant::from_genome(&genome));
             } else {
                 let mut rep = Replicant::default();
-                rep.net.randomize();
+                // rep.net.randomize();
                 rep.net.color[x] = 1.0;
                 new_reps.push(rep);
             }
