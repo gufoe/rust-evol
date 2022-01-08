@@ -93,7 +93,7 @@ impl NetNodes {
 }
 
 fn rand_h() -> NeuronID {
-    format!("h-{}", random::<usize>() % 3)
+    format!("h-{}", random::<usize>() % 10)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -189,10 +189,15 @@ impl Net {
                 self.add_link_from_sensor(random(), NeuralTarget::Action(random()));
             }
         }
-        if random() {
-            for _ in 0..1 {
-                self.add_link_from_sensor(random(), NeuralTarget::Neuron(rand_h()));
-            }
+        if !self.nodes.hidden.is_empty() && random() {
+            let hid: Vec<&String> = self.nodes.hidden.keys().collect();
+            let hid: String = hid[random::<usize>() % hid.len()].clone();
+            self.add_link_from_sensor(random(), NeuralTarget::Neuron(hid));
+        }
+        if !self.nodes.hidden.is_empty() && random() {
+            let hid: Vec<&String> = self.nodes.hidden.keys().collect();
+            let hid: String = hid[random::<usize>() % hid.len()].clone();
+            self.add_hidden_link(hid, random());
         }
         if random() {
             for _ in 0..1 {

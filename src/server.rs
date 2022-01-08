@@ -24,7 +24,7 @@ impl Server {
     pub fn setup(&mut self) {
         self.sim.world.width = 128;
         self.sim.world.height = 128;
-        // self.sim.mapper.clip = Some((128, 128));
+        self.sim.mapper.clip = Some((self.sim.world.width, self.sim.world.height));
         self.sim.mapper.clip = None;
         // self.sim.world.lifespan = 100;
         self.pop_size = 3000;
@@ -32,12 +32,6 @@ impl Server {
         if self.generation == 0 {
             for _ in 0..self.pop_size {
                 let mut rep = Replicant::default();
-                rep.net.randomize();
-                rep.net.randomize();
-                rep.net.randomize();
-                rep.net.randomize();
-                rep.net.randomize();
-                rep.net.randomize();
                 rep.net.randomize();
                 self.sim.replicants.push(rep);
             }

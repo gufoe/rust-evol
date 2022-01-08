@@ -27,7 +27,7 @@ impl Replicant {
         let py = self.pos.1 as f32;
         let w = world.width as f32;
         let h = world.height as f32;
-        return self.pos.0 > world.width/2;
+        // return self.pos.0 > world.width/2;
         // || self.pos.0 < world.width/4;
 
         // if x >= world.width-1 || x <=0 {
@@ -53,51 +53,67 @@ impl Replicant {
         let ally = (friend + 1) % 3;
         let enemy = (friend + 2) % 3;
         // if pool == 1 {
-        //     return map.isexcept(x-1, y, pool) as u8
-        //         + map.isexcept(x+1, y, pool) as u8
-        //         + map.isexcept(x, y+1, pool) as u8
-        //         + map.isexcept(x, y-1, pool) as u8
+        //     return map.isexcept(x-1, y, pool) as i8
+        //         + map.isexcept(x+1, y, pool) as i8
+        //         + map.isexcept(x, y+1, pool) as i8
+        //         + map.isexcept(x, y-1, pool) as i8
         //         > 2;
         // }
-        // let empty_count = !map.has(x - 1, y) as u8
-        //     + !map.has(x + 1, y) as u8
-        //     + !map.has(x, y + 1) as u8
-        //     + !map.has(x, y - 1) as u8;
-        // let friend_count = map.is(x - 1, y, pool) as u8
-        //     + map.is(x + 1, y, pool) as u8
-        //     + map.is(x, y + 1, pool) as u8
-        //     + map.is(x, y - 1, pool) as u8;
-        // let ally_count = map.is(x - 1, y, (pool + 1) % 3) as u8
-        //     + map.is(x + 1, y, (pool + 1) % 3) as u8
-        //     + map.is(x, y + 1, (pool + 1) % 3) as u8
-        //     + map.is(x, y - 1, (pool + 1) % 3) as u8;
-        let enemy_count = map.is(x - 1, y, enemy) as u8
-            + map.is(x + 1, y, enemy) as u8
-            + map.is(x, y + 1, enemy) as u8
-            + map.is(x - 1, y + 1, enemy) as u8
-            + map.is(x + 1, y + 1, enemy) as u8
-            + map.is(x, y - 1, enemy) as u8
-            + map.is(x - 1, y - 1, enemy) as u8
-            + map.is(x + 1, y - 1, enemy) as u8;
-        let friend_count = map.is(x - 1, y, friend) as u8
-            + map.is(x + 1, y, friend) as u8
-            + map.is(x, y + 1, friend) as u8
-            + map.is(x - 1, y + 1, friend) as u8
-            + map.is(x + 1, y + 1, friend) as u8
-            + map.is(x, y - 1, friend) as u8
-            + map.is(x - 1, y - 1, friend) as u8
-            + map.is(x + 1, y - 1, friend) as u8;
+        // let empty_count = !map.has(x - 1, y) as i8
+        //     + !map.has(x + 1, y) as i8
+        //     + !map.has(x, y + 1) as i8
+        //     + !map.has(x, y - 1) as i8;
+        // let friend_count = map.is(x - 1, y, pool) as i8
+        //     + map.is(x + 1, y, pool) as i8
+        //     + map.is(x, y + 1, pool) as i8
+        //     + map.is(x, y - 1, pool) as i8;
+        // let ally_count = map.is(x - 1, y, (pool + 1) % 3) as i8
+        //     + map.is(x + 1, y, (pool + 1) % 3) as i8
+        //     + map.is(x, y + 1, (pool + 1) % 3) as i8
+        //     + map.is(x, y - 1, (pool + 1) % 3) as i8;
+        let enemy_count = map.is(x - 1, y, enemy) as i8
+            + map.is(x + 1, y, enemy) as i8
+            + map.is(x, y + 1, enemy) as i8
+            + map.is(x - 1, y + 1, enemy) as i8
+            + map.is(x + 1, y + 1, enemy) as i8
+            + map.is(x, y - 1, enemy) as i8
+            + map.is(x - 1, y - 1, enemy) as i8
+            + map.is(x + 1, y - 1, enemy) as i8;
+        let friend_count = map.is(x - 1, y, friend) as i8
+            + map.is(x + 1, y, friend) as i8
+            + map.is(x, y + 1, friend) as i8
+            + map.is(x - 1, y + 1, friend) as i8
+            + map.is(x + 1, y + 1, friend) as i8
+            + map.is(x, y - 1, friend) as i8
+            + map.is(x - 1, y - 1, friend) as i8
+            + map.is(x + 1, y - 1, friend) as i8;
 
-        let ally_count = map.is(x - 1, y, ally) as u8
-            + map.is(x + 1, y, ally) as u8
-            + map.is(x, y + 1, ally) as u8
-            + map.is(x - 1, y + 1, ally) as u8
-            + map.is(x + 1, y + 1, ally) as u8
-            + map.is(x, y - 1, ally) as u8
-            + map.is(x - 1, y - 1, ally) as u8
-            + map.is(x + 1, y - 1, ally) as u8;
-        // return friend_count >= 0 && ally_count >= 4;
-        return map.is(x, y - 1, enemy);
+        let ally_count = map.is(x - 1, y, ally) as i8
+            + map.is(x + 1, y, ally) as i8
+            + map.is(x, y + 1, ally) as i8
+            + map.is(x - 1, y + 1, ally) as i8
+            + map.is(x + 1, y + 1, ally) as i8
+            + map.is(x, y - 1, ally) as i8
+            + map.is(x - 1, y - 1, ally) as i8
+            + map.is(x + 1, y - 1, ally) as i8;
+        let any_count = map.has(x - 1, y) as i8
+            + map.has(x + 1, y) as i8
+            + map.has(x, y + 1) as i8
+            + map.has(x - 1, y + 1) as i8
+            + map.has(x + 1, y + 1) as i8
+            + map.has(x, y - 1) as i8
+            + map.has(x - 1, y - 1) as i8
+            + map.has(x + 1, y - 1) as i8;
+        let empty_count = !map.has(x - 1, y) as i8
+            + !map.has(x + 1, y) as i8
+            + !map.has(x, y + 1) as i8
+            + !map.has(x - 1, y + 1) as i8
+            + !map.has(x + 1, y + 1) as i8
+            + !map.has(x, y - 1) as i8
+            + !map.has(x - 1, y - 1) as i8
+            + !map.has(x + 1, y - 1) as i8;
+        return friend_count - ally_count - enemy_count > 1;
+        // return map.is(x, y - 1, friend);
 
         // let has_friend_x = map.is(x - 1, y, pool) || map.is(x + 1, y, pool);
         // let has_friend_y = map.is(x, y + 1, pool) || map.is(x, y - 1, pool);
