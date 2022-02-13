@@ -33,17 +33,17 @@ impl Neuron {
     pub fn output(&self) -> f32 {
         self.charge.tanh()
     }
-    fn fires(&mut self) -> bool {
+    pub fn add(&mut self, num: f32) {
+        self.charge += num;
+    }
+    fn fire(&mut self) -> bool {
         let out = self.output();
-        if out.abs() < 0.5 {
-            return false;
+        if self.output().abs() < 0.9 {
+            false
+        } else {
+            self.charge = 0.0;
+            true
         }
-        let fire = random::<f32>() < out.abs();
-        if !fire {
-            return false;
-        }
-        self.charge = 0.0;
-        true
     }
 }
 
@@ -309,16 +309,23 @@ impl Net {
             let sum = node
                 .inputs
                 .iter()
-                .map(|(source, link)| match source {
-                    NeuralSource::Hidden(hid) => state[&NeuralTarget::Hidden(hid.clone())].output(),
-                    NeuralSource::Sensor(sensor) => *self.sensors.get(sensor).unwrap(),
+                .map(|(source, link)| {
+                    let mut x = match source {
+                        NeuralSource::Hidden(hid) => {
+                            state[&NeuralTarget::Hidden(hid.clone())].output()
+                        }
+                        NeuralSource::Sensor(sensor) => *self.sensors.get(sensor).unwrap(),
+                    };
+                    if link.inverse {
+                        x = 1.0 - x;
+                    }
+                    (x * link.weight).tanh()
                 })
-                .sum::<f32>()
-                .tanh();
+                .sum::<f32>() / node.inputs.len() as f32;
             let state = self.state.get_mut(target).unwrap();
-            state.charge += sum;
+            state.add(sum);
             if let NeuralTarget::Action(action) = target {
-                if state.fires() {
+                if state.fire() {
                     actions.push(action.clone());
                 }
             }
@@ -443,19 +450,30 @@ impl NetGenome {
         }
     }
     pub fn randomize(&mut self) {
-        self.randomize_color();
-        if self.nodes.is_empty() || random() {
+        if self.nodes.is_empty() || random::<f32>() > 0.9 {
             let mut node = NeuralNode {
                 inputs: HashMap::new(),
             };
             node.inputs
                 .insert(NeuralSource::Sensor(random()), NeuralLink::new());
-            let target = if random() {
-                NeuralTarget::Action(random())
+            if random() {
+                let target = NeuralTarget::Action(random());
+                self.nodes.insert(target, node);
             } else {
-                NeuralTarget::Hidden(rand_h())
+                // Add hid <- random sensor
+                let hid = rand_h();
+                let target = NeuralTarget::Hidden(hid.clone());
+                self.nodes.insert(target, node);
+
+                // Add random action <- hid
+                let mut node2 = NeuralNode {
+                    inputs: HashMap::new(),
+                };
+                node2
+                    .inputs
+                    .insert(NeuralSource::Hidden(hid), NeuralLink::new());
+                self.nodes.insert(NeuralTarget::Action(random()), node2);
             };
-            self.nodes.insert(target, node);
         } else {
             let keys: Vec<_> = self.nodes.keys().collect();
             let target = keys[random::<usize>() % keys.len()].clone();

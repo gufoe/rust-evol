@@ -47,10 +47,18 @@ impl<G: Hash + Eq + Serialize + Clone, A: Allele<G> + Serialize + Clone> GenePoo
         let (_, score) = pool.get_mut(&allele_id).unwrap();
         score.record(fitness);
 
-        if pool.len() > 10 {
-            let avg = pool.values().map(|(_, s)| s.avg).sum::<f32>() / pool.len() as f32;
-            pool.retain(|_, (_, s)| s.avg >= avg);
-        }
+        // if pool.len() > 10 {
+        //     let min_use = 1000;
+        //     let values = pool
+        //         .values()
+        //         .filter_map(|(_, s)| if s.count < min_use { None } else { Some(s.avg) })
+        //         .collect::<Vec<_>>();
+        //     let count = values.len();
+        //     if count > 0 {
+        //         let avg = values.iter().sum::<f32>() / count as f32;
+        //         pool.retain(|_, (_, s)| s.count < min_use || s.avg >= avg);
+        //     }
+        // }
     }
     pub fn get_genes(&self) -> Vec<G> {
         self.genes.keys().cloned().collect()
@@ -62,6 +70,38 @@ impl<G: Hash + Eq + Serialize + Clone, A: Allele<G> + Serialize + Clone> GenePoo
         }
         ret
     }
+    pub fn prune(&mut self) {
+        // let dipendenze = HashMap::new();
+
+        // self.genes.values().for_each(|alleles| {
+        //     alleles.values().for_each(|(allele, _)| {
+        //         allele.get_gene_requirements().iter().for_each(|req| {
+        //             req
+        //         });
+        //     });
+        // });
+
+        self.genes.iter_mut().for_each(|(_, alleles)| {
+            if alleles.len() < 3 {
+                return;
+            }
+            let avg: f32 = alleles.values().map(|(_, s)| s.avg).sum::<f32>() / alleles.len() as f32;
+            let indexes = alleles
+                .values()
+                .filter_map(|(a, s)| {
+                    if s.avg < avg {
+                        Some(a.get_allele_id())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            indexes.iter().for_each(|id| {
+                alleles.remove(&id);
+            });
+            // alleles.iter().for_each()
+        });
+    }
     fn require(&self, gene: &G, ret: &mut HashMap<G, A>) {
         if ret.contains_key(gene) {
             return;
@@ -72,10 +112,14 @@ impl<G: Hash + Eq + Serialize + Clone, A: Allele<G> + Serialize + Clone> GenePoo
         }
         let alleles = alleles.unwrap();
 
+        if alleles.is_empty() {
+            return;
+        }
+
         let allele = alleles
             .values()
             .max_by(|(_a, a_score), (_b, b_score)| {
-                if a_score.avg < b_score.avg && random::<f32>() > 0.8 {
+                if a_score.avg > b_score.avg {
                     Ordering::Greater
                 } else {
                     Ordering::Less

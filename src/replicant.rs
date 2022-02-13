@@ -27,7 +27,7 @@ impl Replicant {
         let py = self.pos.1 as f32;
         let w = world.width as f32;
         let h = world.height as f32;
-        // return self.pos.0 > world.width/2;
+        return self.pos.0 > world.width/2;
         // || self.pos.0 < world.width/4;
 
         // if x >= world.width-1 || x <=0 {
@@ -52,6 +52,8 @@ impl Replicant {
         let friend = self.net.pool();
         let ally = (friend + 1) % 3;
         let enemy = (friend + 2) % 3;
+        let green = 1;
+        let blue = 2;
         // if pool == 1 {
         //     return map.isexcept(x-1, y, pool) as i8
         //         + map.isexcept(x+1, y, pool) as i8
@@ -96,6 +98,22 @@ impl Replicant {
             + map.is(x, y - 1, ally) as i8
             + map.is(x - 1, y - 1, ally) as i8
             + map.is(x + 1, y - 1, ally) as i8;
+        let green_count = map.is(x - 1, y, green) as i8
+            + map.is(x + 1, y, green) as i8
+            + map.is(x, y + 1, green) as i8
+            + map.is(x - 1, y + 1, green) as i8
+            + map.is(x + 1, y + 1, green) as i8
+            + map.is(x, y - 1, green) as i8
+            + map.is(x - 1, y - 1, green) as i8
+            + map.is(x + 1, y - 1, green) as i8;
+        let blue_count = map.is(x - 1, y, blue) as i8
+            + map.is(x + 1, y, blue) as i8
+            + map.is(x, y + 1, blue) as i8
+            + map.is(x - 1, y + 1, blue) as i8
+            + map.is(x + 1, y + 1, blue) as i8
+            + map.is(x, y - 1, blue) as i8
+            + map.is(x - 1, y - 1, blue) as i8
+            + map.is(x + 1, y - 1, blue) as i8;
         let any_count = map.has(x - 1, y) as i8
             + map.has(x + 1, y) as i8
             + map.has(x, y + 1) as i8
@@ -112,7 +130,12 @@ impl Replicant {
             + !map.has(x, y - 1) as i8
             + !map.has(x - 1, y - 1) as i8
             + !map.has(x + 1, y - 1) as i8;
-        return friend_count - ally_count - enemy_count > 1;
+        // return friend_count + ally_count - enemy_count > 5;
+        if friend == 0 {
+            return ally_count + enemy_count < 2;
+        } else {
+            return green_count + blue_count > 6;
+        }
         // return map.is(x, y - 1, friend);
 
         // let has_friend_x = map.is(x - 1, y, pool) || map.is(x + 1, y, pool);

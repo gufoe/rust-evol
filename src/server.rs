@@ -24,8 +24,8 @@ pub struct Server {
 }
 impl Server {
     pub fn setup(&mut self) {
-        self.sim.world.width = 128;
-        self.sim.world.height = 128;
+        self.sim.world.width = 80;
+        self.sim.world.height = 80;
         self.sim.mapper.clip = Some((self.sim.world.width, self.sim.world.height));
         self.sim.mapper.clip = None;
         // self.sim.world.lifespan = 100;
@@ -35,6 +35,7 @@ impl Server {
             for _ in 0..self.pop_size {
                 let mut genome = NetGenome::default();
                 genome.randomize();
+                genome.randomize_color();
                 let rep = Replicant::from_genome(&genome);
                 self.sim.replicants.push(rep);
             }
@@ -43,12 +44,10 @@ impl Server {
     }
 
     pub fn tick(&mut self) {
-        if self.time > 100 + crate::rng::random::<usize>(self.generation as u64) % 120 {
+        if self.time > 300 {
+            //} + crate::rng::random::<usize>(self.generation as u64) % 50 {
             // if self.time > self.sim.world.lifespan {
             // println!("Round ended");
-            self.finish_round();
-            self.time = 0;
-            self.generation += 1;
             if let Some(path) = self.auto_save.clone() {
                 let clone = self.clone();
                 thread::spawn(move || {
@@ -66,6 +65,9 @@ impl Server {
                     // std::fs::write(&tmp_file_json_pool, &pool).unwrap();
                 });
             }
+            self.finish_round();
+            self.time = 0;
+            self.generation += 1;
         }
 
         if self.time == 0 {
@@ -137,21 +139,31 @@ impl Server {
     }
 
     fn score_genes(&mut self) {
+        let pools = self.get_pools();
+        let pools = [
+            (pools.get(&0).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+            (pools.get(&1).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+            (pools.get(&2).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+        ];
         for rep in &self.sim.replicants {
             let pool = rep.net.pool();
+            let score = if rep.is_alive(&self.sim.world, &self.sim.mapper) {
+                1.0 + pools[pool]
+            } else {
+                0.0
+            };
             if !self.gene_pools.contains_key(&pool) {
                 self.gene_pools.insert(pool, GenePool::new());
             }
             let pool = self.gene_pools.get_mut(&pool).unwrap();
 
             for (source, node) in &rep.net.nodes {
-                pool.record(
-                    source,
-                    node,
-                    rep.is_alive(&self.sim.world, &self.sim.mapper) as u8 as f32,
-                )
+                pool.record(source, node, score)
             }
         }
+        self.gene_pools.values_mut().for_each(|pool| {
+            // pool.prune();
+        })
     }
 
     fn finish_round(&mut self) {
@@ -171,24 +183,36 @@ impl Server {
     fn replace_replicants_v2(&mut self) {
         self.sim.replicants.clear();
         for (pool_i, pool) in &self.gene_pools {
-            for _ in 0..self.pop_size / self.gene_pools.len() {
+            let mut inserted = 0;
+            while inserted < self.pop_size / self.gene_pools.len() {
                 let mut genome = NetGenome::default();
-                let alleles = pool.build(pool.get_genes());
+                let alleles = pool.build(
+                    pool.get_genes()
+                        .into_iter()
+                        .filter(|gene| match gene {
+                            NeuralTarget::Action(_) => true,
+                            _ => false,
+                        })
+                        .collect(),
+                );
                 genome.nodes = alleles;
                 genome.color = [0.0, 0.0, 0.0];
                 *genome.color.get_mut(*pool_i).unwrap() = 1.0;
                 let pmut = if *pool_i == 0 {
-                    0.9
-                } else if *pool_i == 1 {
-                    0.95
-                } else {
                     0.99
+                } else if *pool_i == 1 {
+                    0.995
+                } else {
+                    0.999
                 };
-                if random::<f32>() > pmut {
-                    genome.randomize();
+                for _ in 0..200 {
+                    if random::<f32>() > pmut {
+                        genome.randomize();
+                    }
+                    let child = Replicant::from_genome(&genome);
+                    self.sim.replicants.push(child);
+                    inserted += 1;
                 }
-                let mut child = Replicant::from_genome(&genome);
-                self.sim.replicants.push(child);
             }
         }
     }

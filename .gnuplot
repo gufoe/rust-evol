@@ -1,4 +1,4 @@
-n = 10
+n = 20
 
 array A[n]
 
@@ -13,5 +13,7 @@ plot "plot.csv" using 0:(avg_n($1)) with lines lw 5 title "red", \
     "plot.csv" using 0:(avg_n($2)) with lines lw 5 title "green", \
     "plot.csv" using 0:(avg_n($3)) with lines lw 5 title "blue"
 
-pause 4
-reread
+# pause 4
+# reread
+
+pause 9999

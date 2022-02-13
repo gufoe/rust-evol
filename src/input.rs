@@ -43,10 +43,10 @@ pub enum Sensor {
 impl Distribution<Sensor> for Standard {
     fn sample<R: Rng + ?Sized>(&self, _rng: &mut R) -> Sensor {
         let actions = [
-            Sensor::Loc { x: random() },
-            Sensor::Osc(random()),
+            // Sensor::Loc { x: random() },
+            // Sensor::Osc(random()),
             Sensor::Bias(random()),
-            Sensor::Random,
+            // Sensor::Random,
             Sensor::Neighbour {
                 vert: random(),
                 incr: random(),
