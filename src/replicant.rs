@@ -112,7 +112,8 @@ impl Replicant {
             + !map.has(x, y - 1) as i8
             + !map.has(x - 1, y - 1) as i8
             + !map.has(x + 1, y - 1) as i8;
-        return friend_count - ally_count - enemy_count > 1;
+
+        return friend_count > 0 && friend_count < 4 && empty_count > 1 && ally_count > 0;
         // return map.is(x, y - 1, friend);
 
         // let has_friend_x = map.is(x - 1, y, pool) || map.is(x + 1, y, pool);

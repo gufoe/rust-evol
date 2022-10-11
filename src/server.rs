@@ -22,12 +22,12 @@ pub struct Server {
 }
 impl Server {
     pub fn setup(&mut self) {
-        self.sim.world.width = 128;
-        self.sim.world.height = 128;
+        self.sim.world.width = 200;
+        self.sim.world.height = 200;
         self.sim.mapper.clip = Some((self.sim.world.width, self.sim.world.height));
-        self.sim.mapper.clip = None;
+        // self.sim.mapper.clip = None;
         // self.sim.world.lifespan = 100;
-        self.pop_size = 3000;
+        self.pop_size = 6000;
         // eprintln!("[server] init {}", self.generation);
         if self.generation == 0 {
             for _ in 0..self.pop_size {
@@ -40,7 +40,7 @@ impl Server {
     }
 
     pub fn tick(&mut self) {
-        if self.time > 100 + crate::rng::random::<usize>(self.generation as u64) % 120 {
+        if self.time > 200 + crate::rng::random::<usize>(self.generation as u64) % 120 {
             // if self.time > self.sim.world.lifespan {
             // println!("Round ended");
             self.finish_round();
@@ -165,11 +165,11 @@ impl Server {
                 };
 
                 let pmut = if x == 0 {
-                    0.9
+                    0.7
                 } else if x == 1 {
-                    0.95
-                } else {
                     0.99
+                } else {
+                    0.995
                 };
                 if random::<f32>() > pmut {
                     child.net.randomize();

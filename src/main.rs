@@ -24,6 +24,7 @@ mod rng;
 struct Cli {
     #[structopt(short, long)]
     render: bool,
+    #[structopt(short, long)]
     file: Option<PathBuf>,
 }
 
