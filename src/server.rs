@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     genome::{Genome, HasGenome},
-    net::NetGenome,
+    net::{NetGenome, NeuralSource, NeuralSourceGenome, NeuralTarget},
+    pool::GenePool,
     replicant::Replicant,
     simulation::Simulation,
 };
@@ -16,6 +17,7 @@ pub struct Server {
     pub auto_save: Option<PathBuf>,
     pub generation: usize,
     pub time: usize,
+    pub gene_pools: HashMap<usize, GenePool<NeuralSource, NeuralSourceGenome>>,
     pub sim: Simulation,
     pub pop_size: usize,
     pub min_time: usize,
@@ -30,11 +32,11 @@ impl Server {
         // self.sim.mapper.clip = Some((self.sim.world.width, self.sim.world.height));
         // self.sim.mapper.clip = None;
         // self.sim.world.lifespan = 100;
-        self.pop_size = 15 * 3;
+        self.pop_size = 300 * 3;
 
-        self.min_time = 100;
+        self.min_time = 400;
         self.bonus_time = 1;
-        self.mut_rate = [0.00, 0.00, 0.03];
+        self.mut_rate = [0.0001, 0.0002, 0.03];
 
         // eprintln!("[server] init {}", self.generation);
         if self.generation == 0 {
@@ -60,7 +62,7 @@ impl Server {
         {
             // if self.time > self.sim.world.lifespan {
             // println!("Round ended");
-            self.finish_round();
+            self.finish_round_pool();
             self.time = 0;
             self.generation += 1;
             if let Some(path) = self.auto_save.clone() {
@@ -144,8 +146,40 @@ impl Server {
         ret
     }
 
-    fn finish_round(&mut self) {
-        // println!("Replicants: {:#?}", self.sim.replicants);
+    fn score_genes(&mut self) {
+        let pools = self.get_pools();
+        let pools = [
+            (pools.get(&0).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+            (pools.get(&1).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+            (pools.get(&2).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+        ];
+        for rep in &self.sim.replicants {
+            let pool = rep.net.pool();
+            let score = if rep.is_alive(&self.sim.world, &self.sim.mapper) {
+                1.0 + pools[pool]
+            } else {
+                0.0
+            };
+            if !self.gene_pools.contains_key(&pool) {
+                self.gene_pools.insert(pool, GenePool::new());
+            }
+            let pool = self.gene_pools.get_mut(&pool).unwrap();
+
+            for (source, links) in &rep.net.input_links {
+                pool.record(
+                    &NeuralSource::Sensor(source.clone()),
+                    &NeuralSourceGenome {
+                        outputs: links.clone(),
+                    },
+                    score,
+                )
+            }
+        }
+        self.gene_pools.values_mut().for_each(|pool| {
+            // pool.prune();
+        })
+    }
+    fn finish_round_common(&mut self) {
         let pools = self.get_pools();
         println!(
             "{} {:.3} {:.3} {:.3}",
@@ -154,6 +188,68 @@ impl Server {
             (pools.get(&1).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
             (pools.get(&2).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
         );
+    }
+
+    fn finish_round_pool(&mut self) {
+        self.finish_round_common();
+        self.score_genes();
+        // self.print_pools_stats();
+        self.replace_replicants_v2();
+    }
+
+    // fn print_pools_stats(&mut self) {
+    //     let pools = self.get_pools();
+    //     println!(
+    //         "{:.3} {:.3} {:.3}",
+    //         (pools.get(&0).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+    //         (pools.get(&1).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+    //         (pools.get(&2).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
+    //     );
+    // }
+    fn replace_replicants_v2(&mut self) {
+        self.sim.replicants.clear();
+        for (pool_i, pool) in &self.gene_pools {
+            let mut inserted = 0;
+            while inserted < self.pop_size / self.gene_pools.len() {
+                let mut genome = NetGenome::default();
+                let alleles = pool.build(
+                    pool.get_genes()
+                        .into_iter()
+                        .filter(|gene| match gene {
+                            NeuralSource::Sensor(_) => true,
+                            _ => false,
+                        })
+                        .collect(),
+                );
+                genome.links = alleles
+                    .iter()
+                    .map(|(source, genome)| {
+                        let mut ret = HashMap::new();
+                        genome.outputs.iter().for_each(|(i, v)| {
+                            ret.insert(i.clone(), v.clone());
+                        });
+                        return (source.clone(), ret);
+                    })
+                    .collect();
+                genome.color = [0.0, 0.0, 0.0];
+                *genome.color.get_mut(*pool_i).unwrap() = 1.0;
+                let pmut = self.mut_rate[*pool_i];
+                for _ in 0..self.pop_size / 3 {
+                    let mut child = Replicant::from_genome(&genome);
+                    if random::<f32>() < pmut {
+                        // genome.randomize();
+                        child.net.randomize();
+                    }
+                    self.sim.replicants.push(child);
+                    inserted += 1;
+                }
+            }
+        }
+    }
+    fn finish_round_std(&mut self) {
+        self.finish_round_common();
+        // println!("Replicants: {:#?}", self.sim.replicants);
+        let pools = self.get_pools();
         let mut new_reps: Vec<Replicant> = vec![];
         for i in 0..self.pop_size {
             let x = i % pools.len();

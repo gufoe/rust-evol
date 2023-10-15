@@ -44,10 +44,10 @@ impl Replicant {
         // if px > w * 0.95 {
         //     return false;
         // }
-        if px < w * 0.5 {
-            return false;
-        }
-        return true;
+        // if px < w * 0.5 {
+        //     return false;
+        // }
+        // return true;
         // if py > h * 0.95 {
         //     return false;
         // }

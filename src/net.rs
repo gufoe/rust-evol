@@ -1,5 +1,10 @@
-use std::{collections::HashMap, hash::Hash, os::unix::thread};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    os::unix::thread,
+};
 
+use druid::piet::RoundInto;
 use rand::{
     distributions::Standard,
     prelude::Distribution,
@@ -13,6 +18,7 @@ use crate::{
     actions::Action,
     genome::{Genome, HasGenome},
     input::Sensor,
+    pool::{Allele, AlleleID},
     rng::rand_f32,
 };
 
@@ -61,6 +67,15 @@ pub struct NeuralLink {
     pub weight: f32,
 }
 
+impl Hash for NeuralLink {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.inverse.hash(state);
+        ((self.weight * 1000.0) as i32).hash(state);
+    }
+}
 impl NeuralLink {
     fn new() -> Self {
         Self {
@@ -284,7 +299,7 @@ pub struct NetGenome {
     pub links: HashMap<NeuralSource, HashMap<NeuralTarget, NeuralLink>>,
 }
 
-#[derive(Hash, PartialEq, Eq, Clone, Serialize)]
+#[derive(Hash, PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
 pub enum NeuralSource {
     Sensor(Sensor),
     Hidden(NeuronID),
@@ -491,5 +506,40 @@ impl NetMutations {
             }
         }
         return true;
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NeuralSourceGenome {
+    // pub source: NeuralSource,
+    pub outputs: HashMap<NeuralTarget, NeuralLink>,
+}
+impl Hash for NeuralSourceGenome {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        // self.source.hash(state);
+        for (target, link) in &self.outputs {
+            target.hash(state);
+            link.hash(state);
+        }
+    }
+}
+
+impl Allele<NeuralSource> for NeuralSourceGenome {
+    fn get_allele_id(&self) -> AlleleID {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        s.finish()
+    }
+    fn get_gene_requirements(&self) -> Vec<NeuralSource> {
+        self.outputs
+            .iter()
+            .filter_map(|(target, _link)| match target {
+                NeuralTarget::Neuron(x) => Some(NeuralSource::Hidden(x.clone())),
+                NeuralTarget::Action(_) => None,
+            })
+            .collect()
     }
 }
