@@ -7,10 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug",
-            "program": "${workspaceFolder}/<your program>",
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            "name": "Cargo launch",
+            "cargo": {
+                "args": [
+                    "build"
+                ]
+            },
+            "args": [
+                "-r"
+            ]
         }
     ]
 }

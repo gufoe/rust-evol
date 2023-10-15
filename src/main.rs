@@ -36,8 +36,7 @@ fn main() {
         server.sim.replicants.iter_mut().for_each(|x| x.net.update_nodes());
         server
     } else {
-        let mut server = Server::default();
-        server
+        Server::default()
     };
 
     server.auto_save = args.file;

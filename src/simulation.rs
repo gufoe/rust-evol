@@ -9,7 +9,7 @@ use crate::{input::NeighbourType, replicant::Replicant, world::World};
 pub struct Simulation {
     pub world: World,
     pub replicants: Vec<Replicant>,
-    // #[serde(skip_serializing)]
+    #[serde(skip_serializing)]
     pub mapper: CellMapper,
 }
 
@@ -37,6 +37,7 @@ impl Simulation {
             .map(|(rep_i, rep)| {
                 let mut input = HashMap::new();
                 rep.net.input_links.keys().for_each(|sensor| match *sensor {
+                    crate::input::Sensor::Null => {}
                     crate::input::Sensor::Loc { x } => {
                         input.insert(
                             sensor.clone(),
@@ -48,10 +49,13 @@ impl Simulation {
                         );
                     }
                     crate::input::Sensor::Osc(x) => {
-                        input.insert(sensor.clone(), (rep.time as f32 / (x + 1) as f32).sin());
+                        input.insert(
+                            sensor.clone(),
+                            1.0 + (rep.time as f32 / 2.0 * (1.0 + x as f32 / 255.0) as f32).sin(),
+                        );
                     }
                     crate::input::Sensor::Bias(x) => {
-                        input.insert(sensor.clone(), (x / i8::MAX).into());
+                        input.insert(sensor.clone(), 4.0f32 * (x as f32 / i8::MAX as f32));
                     }
                     crate::input::Sensor::Random => {
                         input.insert(sensor.clone(), random());
@@ -59,7 +63,21 @@ impl Simulation {
                     crate::input::Sensor::Alive => {
                         input.insert(
                             sensor.clone(),
-                            rep.is_alive(&self.world, &self.mapper) as u8 as f32,
+                            if rep.is_alive(&self.world, &self.mapper) {
+                                1.0
+                            } else {
+                                0.0
+                            },
+                        );
+                    }
+                    crate::input::Sensor::Dead => {
+                        input.insert(
+                            sensor.clone(),
+                            if !rep.is_alive(&self.world, &self.mapper) {
+                                1.0
+                            } else {
+                                0.0
+                            },
                         );
                     }
                     crate::input::Sensor::Neighbour { vert, incr, kind } => {
@@ -92,25 +110,25 @@ impl Simulation {
                     crate::actions::Action::IncX => {
                         if self.mapper.clip.is_some() || rep.pos.0 + 1 < self.world.width {
                             self.mapper.move_rel(&mut rep.pos, (1, 0), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                     crate::actions::Action::IncY => {
                         if self.mapper.clip.is_some() || rep.pos.1 + 1 < self.world.height {
                             self.mapper.move_rel(&mut rep.pos, (0, 1), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                     crate::actions::Action::DecX => {
                         if self.mapper.clip.is_some() || rep.pos.0 - 1 > 0 {
                             self.mapper.move_rel(&mut rep.pos, (-1, 0), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                     crate::actions::Action::DecY => {
                         if self.mapper.clip.is_some() || rep.pos.1 - 1 > 0 {
                             self.mapper.move_rel(&mut rep.pos, (0, -1), rep.net.pool());
-                            rep.moves+=1;
+                            rep.moves += 1;
                         }
                     }
                 };

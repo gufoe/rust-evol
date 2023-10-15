@@ -1,6 +1,12 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, os::unix::thread};
 
-use rand::random;
+use rand::{
+    distributions::Standard,
+    prelude::Distribution,
+    random,
+    seq::{IteratorRandom, SliceRandom},
+    thread_rng, Rng,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -24,7 +30,7 @@ impl Default for Neuron {
 
 impl Neuron {
     pub fn discharge(&mut self) {
-        self.charge *= 0.5;
+        self.charge *= 0.9;
     }
     pub fn output(&self) -> f32 {
         self.charge.tanh()
@@ -64,9 +70,9 @@ impl NeuralLink {
     }
     fn output(&self, mut x: f32) -> f32 {
         if self.inverse {
-            x = 1.0 - x;
+            // x = - x;
         }
-        (x * self.weight).tan()
+        (x * self.weight).tanh()
     }
 }
 
@@ -163,12 +169,12 @@ impl Net {
             }
         }
     }
-    pub fn randomize(&mut self) {
+    fn randomize_color(&mut self) {
         let i = random::<usize>() % self.color.len();
         let c = self.color.get_mut(i).unwrap();
         *c += (random::<f32>() * 2.0 - 1.0) * 0.2;
         if *c > 1.0 {
-            *c = 1.0 - (*c - 1.0);
+            *c = 1.0; // - (*c - 1.0);
         }
         if *c < 0.0 {
             *c = c.abs();
@@ -177,53 +183,27 @@ impl Net {
         let max = self.color[0].max(self.color[1]).max(self.color[2]);
         for x in &mut self.color {
             if *x != max {
-                *x -= 0.01;
+                *x -= 0.1;
                 *x = x.min(1.0).max(0.0);
             }
         }
+    }
+    pub fn randomize(&mut self) {
+        // self.randomize_color();
         // self.add_link_from_sensor(random(), NeuralTarget::Action(random()));
         // return;
+        loop {
+            let mutation: NetMutations = random();
+            if mutation.mutate(self) {
+                break;
+            }
+        }
 
-        if random() {
-            for _ in 0..1 {
-                self.add_link_from_sensor(random(), NeuralTarget::Action(random()));
-            }
-        }
-        if !self.nodes.hidden.is_empty() && random() {
-            let hid: Vec<&String> = self.nodes.hidden.keys().collect();
-            let hid: String = hid[random::<usize>() % hid.len()].clone();
-            self.add_link_from_sensor(random(), NeuralTarget::Neuron(hid));
-        }
-        if !self.nodes.hidden.is_empty() && random() {
-            let hid: Vec<&String> = self.nodes.hidden.keys().collect();
-            let hid: String = hid[random::<usize>() % hid.len()].clone();
-            self.add_hidden_link(hid, random());
-        }
-        if random() {
-            for _ in 0..1 {
-                let h = rand_h();
-                self.add_link_from_sensor(random(), NeuralTarget::Neuron(h.clone()));
-                self.add_hidden_link(h.clone(), random());
-            }
-        }
-        for _ in 0..(random::<usize>() % 2) {
-            if self.hidden_links.is_empty() {
-                continue;
-            }
-            let keys: Vec<_> = self.hidden_links.keys().collect();
-            let i = random::<usize>() % keys.len();
-            let key = keys[i].clone();
-            self.hidden_links.remove(&key).unwrap();
-        }
-        for _ in 0..(random::<usize>() % 2) {
-            if self.input_links.is_empty() {
-                continue;
-            }
-            let keys: Vec<_> = self.input_links.keys().collect();
-            let i = random::<usize>() % keys.len();
-            let key = keys[i].clone();
-            self.input_links.remove(&key).unwrap();
-        }
+        // remove empty links
+        self.input_links.retain(|_, v| !v.is_empty());
+        self.hidden_links.retain(|_, v| !v.is_empty());
+        self.hidden_links.retain(|_, v| !v.is_empty());
+
         self.update_nodes();
         self.clear();
         // print!("\r{:?}", self.nodes.hidden.len());
@@ -241,9 +221,8 @@ impl Net {
             }
         };
     }
-    pub fn add_hidden_link(&mut self, source: String, action: Action) {
+    pub fn add_hidden_link(&mut self, source: String, target: NeuralTarget) {
         let link = NeuralLink::new();
-        let target = NeuralTarget::Action(action);
         match self.hidden_links.get_mut(&source) {
             Some(links) => {
                 links.insert(target, link);
@@ -400,5 +379,117 @@ impl Genome for NetGenome {
             }
         }
         ret
+    }
+}
+
+#[derive(Clone, Debug)]
+enum NetMutations {
+    AddLinkFromSensorToAction,
+    AddLinkFromSensorToHidden,
+    AddLinkFromHiddenToHidden,
+    AddLinkFromHiddenToAction,
+    RemoveLinkFromSensor,
+    RemoveLinkFromHidden,
+    AddHidden,
+}
+impl Distribution<NetMutations> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, _rng: &mut R) -> NetMutations {
+        let binding = [
+            [&NetMutations::AddLinkFromSensorToAction].repeat(3),
+            [&NetMutations::AddLinkFromSensorToHidden].repeat(3),
+            [&NetMutations::AddLinkFromHiddenToHidden].repeat(3),
+            [&NetMutations::AddLinkFromHiddenToAction].repeat(3),
+            [&NetMutations::RemoveLinkFromSensor].repeat(1),
+            [&NetMutations::RemoveLinkFromHidden].repeat(1),
+            [&NetMutations::AddHidden].repeat(1),
+        ];
+        let actions: Vec<_> = binding.iter().flatten().collect();
+        actions
+            .choose(&mut thread_rng())
+            .unwrap()
+            .to_owned()
+            .to_owned()
+            .clone()
+    }
+}
+
+impl NetMutations {
+    fn mutate(&self, net: &mut Net) -> bool {
+        match self {
+            NetMutations::AddLinkFromSensorToAction => {
+                net.add_link_from_sensor(random(), NeuralTarget::Action(random()));
+            }
+            NetMutations::AddLinkFromSensorToHidden => {
+                if net.nodes.hidden.is_empty() {
+                    return false;
+                }
+                let hid = net.nodes.hidden.keys().choose(&mut thread_rng()).unwrap();
+                net.add_link_from_sensor(random(), NeuralTarget::Neuron(hid.to_string()));
+            }
+            NetMutations::AddLinkFromHiddenToAction => {
+                if net.nodes.hidden.is_empty() {
+                    return false;
+                }
+                let h1 = net
+                    .nodes
+                    .hidden
+                    .keys()
+                    .choose(&mut thread_rng())
+                    .unwrap()
+                    .to_string();
+                net.add_hidden_link(h1, NeuralTarget::Action(random()));
+            }
+            NetMutations::AddLinkFromHiddenToHidden => {
+                if net.nodes.hidden.is_empty() {
+                    return false;
+                }
+                let h1 = net
+                    .nodes
+                    .hidden
+                    .keys()
+                    .choose(&mut thread_rng())
+                    .unwrap()
+                    .to_string();
+                let h2 = net
+                    .nodes
+                    .hidden
+                    .keys()
+                    .choose(&mut thread_rng())
+                    .unwrap()
+                    .to_string();
+                net.add_hidden_link(h1, NeuralTarget::Neuron(h2));
+            }
+            NetMutations::AddHidden => {
+                // add link from sensor -> hidden
+                let h = rand_h();
+                net.add_link_from_sensor(random(), NeuralTarget::Neuron(h.clone()));
+                net.add_hidden_link(h.clone(), NeuralTarget::Action(random()));
+            }
+            NetMutations::RemoveLinkFromHidden => {
+                if net.hidden_links.is_empty() {
+                    return false;
+                }
+                let hidden_id = net
+                    .hidden_links
+                    .keys()
+                    .choose(&mut thread_rng())
+                    .unwrap()
+                    .clone();
+                net.hidden_links.remove(&hidden_id).unwrap();
+            }
+            NetMutations::RemoveLinkFromSensor => {
+                if net.input_links.is_empty() {
+                    return false;
+                }
+                let input_id = net
+                    .input_links
+                    .keys()
+                    .choose(&mut thread_rng())
+                    .unwrap()
+                    .clone();
+                net.input_links.remove(&input_id).unwrap();
+            }
+        }
+        return true;
     }
 }

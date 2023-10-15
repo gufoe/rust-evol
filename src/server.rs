@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, thread};
+use std::{collections::HashMap, fs, path::PathBuf, thread};
 
 use rand::random;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -18,21 +18,31 @@ pub struct Server {
     pub time: usize,
     pub sim: Simulation,
     pub pop_size: usize,
+    pub min_time: usize,
+    pub bonus_time: usize,
+    pub mut_rate: [f32; 3],
     pub prev_survival: [usize; 3],
 }
 impl Server {
     pub fn setup(&mut self) {
-        self.sim.world.width = 200;
-        self.sim.world.height = 200;
-        self.sim.mapper.clip = Some((self.sim.world.width, self.sim.world.height));
+        self.sim.world.width = 100;
+        self.sim.world.height = 100;
+        // self.sim.mapper.clip = Some((self.sim.world.width, self.sim.world.height));
         // self.sim.mapper.clip = None;
         // self.sim.world.lifespan = 100;
-        self.pop_size = 6000;
+        self.pop_size = 15 * 3;
+
+        self.min_time = 100;
+        self.bonus_time = 1;
+        self.mut_rate = [0.00, 0.00, 0.03];
+
         // eprintln!("[server] init {}", self.generation);
         if self.generation == 0 {
             for _ in 0..self.pop_size {
                 let mut rep = Replicant::default();
-                rep.net.randomize();
+                for _ in 0..1 {
+                    rep.net.randomize();
+                }
                 self.sim.replicants.push(rep);
             }
         }
@@ -40,7 +50,14 @@ impl Server {
     }
 
     pub fn tick(&mut self) {
-        if self.time > 200 + crate::rng::random::<usize>(self.generation as u64) % 120 {
+        if self.time == 0 {
+            self.setup();
+        }
+        // fs::write("/tmp/debug.json", serde_json::to_string_pretty(&self).unwrap()).unwrap();
+
+        if self.time
+            > self.min_time + crate::rng::random::<usize>(self.generation as u64) % self.bonus_time
+        {
             // if self.time > self.sim.world.lifespan {
             // println!("Round ended");
             self.finish_round();
@@ -60,13 +77,10 @@ impl Server {
                     std::fs::write(&tmp_file_json, &ser).unwrap();
                 });
             }
-        }
-
-        if self.time == 0 {
             self.setup();
         }
 
-        assert!(self.sim.replicants.len() == self.pop_size);
+        // assert!(self.sim.replicants.len() == self.pop_size);
 
         // println!("Round {}", self.time);
         // Normal cycle
@@ -134,7 +148,8 @@ impl Server {
         // println!("Replicants: {:#?}", self.sim.replicants);
         let pools = self.get_pools();
         println!(
-            "{:.3} {:.3} {:.3}",
+            "{} {:.3} {:.3} {:.3}",
+            self.generation,
             (pools.get(&0).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
             (pools.get(&1).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
             (pools.get(&2).unwrap().len() * pools.len()) as f32 / self.pop_size as f32,
@@ -148,37 +163,35 @@ impl Server {
             if !pool.is_empty() {
                 let parent_ai = random::<usize>() % pool.len();
                 let parent_a = pool.get(parent_ai).unwrap();
-                let mut child = if random::<f32>() > 0.9 {
-                    // let parent_b = pool.get(&random() % pool.len()).unwrap();
-                    let mut parent_b = pool.get(0).unwrap();
-                    for (parent_bi, rep) in pool.iter().enumerate() {
-                        if parent_bi == parent_ai
-                            || (parent_bi != parent_ai
-                                && parent_a.dist(parent_b) > parent_a.dist(rep))
-                        {
-                            parent_b = rep;
-                        }
-                    }
-                    Replicant::from_genome(&parent_a.to_genome().mix(&parent_b.to_genome()))
-                } else {
-                    parent_a.clone()
-                };
+                // let mut child = if random::<f32>() > 0.9 {
+                //     let parent_b = pool.get(&random() % pool.len()).unwrap();
+                //     // Match closer cells
+                //     // let mut parent_b = pool.get(0).unwrap();
+                //     // for (parent_bi, rep) in pool.iter().enumerate() {
+                //     //     if parent_bi == parent_ai
+                //     //         || (parent_bi != parent_ai
+                //     //             && parent_a.dist(parent_b) > parent_a.dist(rep))
+                //     //     {
+                //     //         parent_b = rep;
+                //     //     }
+                //     // }
+                //     Replicant::from_genome(&parent_a.to_genome().mix(&parent_b.to_genome()))
+                // } else {
+                //     parent_a.clone()
+                // };
+                let mut child = parent_a.clone();
 
-                let pmut = if x == 0 {
-                    0.7
-                } else if x == 1 {
-                    0.99
-                } else {
-                    0.995
-                };
-                if random::<f32>() > pmut {
+                let pmut = self.mut_rate[x];
+                if pmut > random::<f32>() {
                     child.net.randomize();
                 }
                 new_reps.push(child);
             } else {
                 let mut rep = Replicant::default();
                 rep.net.randomize();
-                rep.net.color[x] = 1.0;
+                rep.net.color[x] = 0.9;
+                rep.net.color[(x + 1) % 3] = 0.7;
+                rep.net.color[(x + 2) % 3] = 0.7;
                 new_reps.push(rep);
             }
 
