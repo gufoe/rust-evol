@@ -352,7 +352,7 @@ impl HasGenome<NetGenome> for Net {
     }
 }
 impl NetGenome {
-    pub fn pool(&self) -> usize {
+    pub fn _pool(&self) -> usize {
         let c = self.color;
         let max = c[0].max(c[1]).max(c[2]);
         if c[0] == max {
